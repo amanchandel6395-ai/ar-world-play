@@ -14,7 +14,7 @@ type Dbg = {
   depth: string;
   fps: number;
   distance: string;
-  error?: string;
+  error?: string | undefined;
 };
 
 export function WorldAR() {

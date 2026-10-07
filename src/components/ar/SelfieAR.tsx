@@ -17,7 +17,7 @@ type Dbg = {
   res: string;
   pos: string;
   delegate: string;
-  error?: string;
+  error?: string | undefined;
   stage: string;
 };
 
@@ -274,7 +274,7 @@ export function SelfieAR() {
     { label: "DELEGATE", value: dbg.delegate },
     { label: "HEAD POS", value: dbg.pos },
     { label: "DEVICE", value: deviceLabel() },
-    { label: "STAGE", value: dbg.stage, state: dbg.error ? "off" : undefined },
+    { label: "STAGE", value: dbg.stage, state: dbg.error ? "off" : "info" },
   ];
 
   return (
