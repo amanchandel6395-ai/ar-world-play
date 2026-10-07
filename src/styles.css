@@ -129,7 +129,6 @@
     background-position: -1px -1px;
   }
   .mirror-x { transform: scaleX(-1); }
-  .mirror-x-done {}
   .bg-stage {
     background:
       radial-gradient(60rem 40rem at 15% -10%, color-mix(in oklch, var(--saffron) 28%, transparent), transparent 60%),

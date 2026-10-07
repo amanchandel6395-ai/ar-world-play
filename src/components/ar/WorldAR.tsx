@@ -21,7 +21,7 @@ export function WorldAR({
   buildSubject,
   onExit,
   showDebug = true,
-}: { buildSubject?: () => THREE.Object3D; onExit?: () => void; showDebug?: boolean } = {}) {
+}: { buildSubject?: (() => THREE.Object3D) | undefined; onExit?: () => void; showDebug?: boolean } = {}) {
   const canvasRef = useRef<HTMLCanvasElement>(null);
   const overlayRef = useRef<HTMLDivElement>(null);
   const sessionRef = useRef<any>(null);

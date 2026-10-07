@@ -13,6 +13,8 @@ import { Route as IndexRouteImport } from './routes/index'
 import { Route as SelfieRouteImport } from './routes/selfie'
 import { Route as WorldRouteImport } from './routes/world'
 import { Route as ApiEnhanceRouteImport } from './routes/api/enhance'
+import { Route as ExperienceSceneRouteImport } from './routes/experience.$scene'
+import { Route as RTokenRouteImport } from './routes/r.$token'
 
 const IndexRoute = IndexRouteImport.update({
   id: '/',
@@ -34,18 +36,32 @@ const ApiEnhanceRoute = ApiEnhanceRouteImport.update({
   path: '/api/enhance',
   getParentRoute: () => rootRouteImport,
 } as any)
+const ExperienceSceneRoute = ExperienceSceneRouteImport.update({
+  id: '/experience/$scene',
+  path: '/experience/$scene',
+  getParentRoute: () => rootRouteImport,
+} as any)
+const RTokenRoute = RTokenRouteImport.update({
+  id: '/r/$token',
+  path: '/r/$token',
+  getParentRoute: () => rootRouteImport,
+} as any)
 
 export interface FileRoutesByFullPath {
   '/': typeof IndexRoute
   '/selfie': typeof SelfieRoute
   '/world': typeof WorldRoute
   '/api/enhance': typeof ApiEnhanceRoute
+  '/experience/$scene': typeof ExperienceSceneRoute
+  '/r/$token': typeof RTokenRoute
 }
 export interface FileRoutesByTo {
   '/': typeof IndexRoute
   '/selfie': typeof SelfieRoute
   '/world': typeof WorldRoute
   '/api/enhance': typeof ApiEnhanceRoute
+  '/experience/$scene': typeof ExperienceSceneRoute
+  '/r/$token': typeof RTokenRoute
 }
 export interface FileRoutesById {
   __root__: typeof rootRouteImport
@@ -53,13 +69,34 @@ export interface FileRoutesById {
   '/selfie': typeof SelfieRoute
   '/world': typeof WorldRoute
   '/api/enhance': typeof ApiEnhanceRoute
+  '/experience/$scene': typeof ExperienceSceneRoute
+  '/r/$token': typeof RTokenRoute
 }
 export interface FileRouteTypes {
   fileRoutesByFullPath: FileRoutesByFullPath
-  fullPaths: '/' | '/selfie' | '/world' | '/api/enhance'
+  fullPaths:
+    | '/'
+    | '/selfie'
+    | '/world'
+    | '/api/enhance'
+    | '/experience/$scene'
+    | '/r/$token'
   fileRoutesByTo: FileRoutesByTo
-  to: '/' | '/selfie' | '/world' | '/api/enhance'
-  id: '__root__' | '/' | '/selfie' | '/world' | '/api/enhance'
+  to:
+    | '/'
+    | '/selfie'
+    | '/world'
+    | '/api/enhance'
+    | '/experience/$scene'
+    | '/r/$token'
+  id:
+    | '__root__'
+    | '/'
+    | '/selfie'
+    | '/world'
+    | '/api/enhance'
+    | '/experience/$scene'
+    | '/r/$token'
   fileRoutesById: FileRoutesById
 }
 export interface RootRouteChildren {
@@ -67,6 +104,8 @@ export interface RootRouteChildren {
   SelfieRoute: typeof SelfieRoute
   WorldRoute: typeof WorldRoute
   ApiEnhanceRoute: typeof ApiEnhanceRoute
+  ExperienceSceneRoute: typeof ExperienceSceneRoute
+  RTokenRoute: typeof RTokenRoute
 }
 
 declare module '@tanstack/react-router' {
@@ -99,6 +138,20 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof ApiEnhanceRouteImport
       parentRoute: typeof rootRouteImport
     }
+    '/experience/$scene': {
+      id: '/experience/$scene'
+      path: '/experience/$scene'
+      fullPath: '/experience/$scene'
+      preLoaderRoute: typeof ExperienceSceneRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/r/$token': {
+      id: '/r/$token'
+      path: '/r/$token'
+      fullPath: '/r/$token'
+      preLoaderRoute: typeof RTokenRouteImport
+      parentRoute: typeof rootRouteImport
+    }
   }
 }
 
@@ -107,6 +160,8 @@ const rootRouteChildren: RootRouteChildren = {
   SelfieRoute: SelfieRoute,
   WorldRoute: WorldRoute,
   ApiEnhanceRoute: ApiEnhanceRoute,
+  ExperienceSceneRoute: ExperienceSceneRoute,
+  RTokenRoute: RTokenRoute,
 }
 export const routeTree = rootRouteImport
   ._addFileChildren(rootRouteChildren)
