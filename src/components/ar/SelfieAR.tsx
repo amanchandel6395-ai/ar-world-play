@@ -210,15 +210,15 @@ export function SelfieAR() {
                   maskTex = new THREE.DataTexture(maskBuf, w, h, THREE.RedFormat, THREE.UnsignedByteType);
                   maskTex.minFilter = maskTex.magFilter = THREE.LinearFilter;
                   maskTex.unpackAlignment = 1;
-                  personMat.uniforms.uMask.value = maskTex;
+                  personMat.uniforms["uMask"]!.value = maskTex;
                 }
-                for (let i = 0; i < f.length; i++) maskBuf[i] = f[i] * 255;
+                for (let i = 0; i < f.length; i++) maskBuf[i] = f[i]! * 255;
                 maskTex.needsUpdate = true;
               });
-              personMat.uniforms.uOn.value = 1;
+              personMat.uniforms["uOn"]!.value = 1;
               state.segmentation = true;
             } else {
-              personMat.uniforms.uOn.value = 0;
+              personMat.uniforms["uOn"]!.value = 0;
               state.segmentation = false;
             }
           }
