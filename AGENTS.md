@@ -8,3 +8,12 @@
 > Commits you push to the connected branch sync back to Lovable and show up in
 > the editor, so keep the branch in a working state.
 <!-- LOVABLE:END -->
+
+# Architecture rules
+
+- One shared AR engine (`src/ar/engine/frontEngine.ts`) powers every front/rear camera experience; scenes plug in via `SceneConfig` in `src/ar/scenes/` — never duplicate camera/tracking per scene.
+- AR objects are rendered in three.js from tracking data only; never position AR content with CSS. Why: product requirement for real AR.
+- World AR uses `WorldAR` (WebXR) with capability detection; unsupported devices get an honest fallback, never a faked one.
+- AI image generation runs post-capture only via the `/api/enhance` server route; keys stay server-side.
+- Shared photos live in the private `captures` bucket; `shares` table is service-role only and accessed via server functions with expiring random tokens.
+- `/selfie` and `/world` are kept as raw engine test pages (linked only in dev mode).

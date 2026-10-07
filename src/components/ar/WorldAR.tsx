@@ -17,7 +17,11 @@ type Dbg = {
   error?: string | undefined;
 };
 
-export function WorldAR() {
+export function WorldAR({
+  buildSubject,
+  onExit,
+  showDebug = true,
+}: { buildSubject?: (() => THREE.Object3D) | undefined; onExit?: () => void; showDebug?: boolean } = {}) {
   const canvasRef = useRef<HTMLCanvasElement>(null);
   const overlayRef = useRef<HTMLDivElement>(null);
   const sessionRef = useRef<any>(null);
@@ -100,7 +104,8 @@ export function WorldAR() {
         new THREE.MeshBasicMaterial({ color: 0x000000, transparent: true, opacity: 0.35 }),
       );
       disc.position.y = 0.002;
-      subject.add(body, head, disc, new THREE.AxesHelper(0.5));
+      if (buildSubject) subject.add(buildSubject());
+      else subject.add(body, head, disc, new THREE.AxesHelper(0.5));
       subject.matrixAutoUpdate = false;
       subject.visible = false;
       scene.add(subject);
@@ -218,7 +223,7 @@ export function WorldAR() {
       <canvas ref={canvasRef} className="fixed inset-0 h-full w-full" />
       <div ref={overlayRef} className="pointer-events-none relative z-10 flex min-h-dvh flex-col justify-between p-3">
         <div className="flex items-start justify-between gap-2">
-          <DebugPanel rows={rows} title="WORLD AR DEBUG" />
+          {showDebug ? <DebugPanel rows={rows} title="WORLD AR DEBUG" /> : <span />}
           <div className="pointer-events-auto flex flex-col gap-2">
             {dbg.session ? (
               <button
@@ -228,9 +233,15 @@ export function WorldAR() {
                 exit AR
               </button>
             ) : (
-              <a href="/" className="rounded-md border border-border bg-overlay px-3 py-1.5 font-mono text-xs text-foreground">
-                ← back
-              </a>
+              onExit ? (
+                <button onClick={onExit} className="rounded-full border border-border bg-overlay px-5 py-3 text-sm font-semibold text-foreground">
+                  ← Back
+                </button>
+              ) : (
+                <a href="/" className="rounded-md border border-border bg-overlay px-3 py-1.5 font-mono text-xs text-foreground">
+                  ← back
+                </a>
+              )
             )}
           </div>
         </div>
