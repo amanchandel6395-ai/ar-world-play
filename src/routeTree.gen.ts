@@ -12,6 +12,7 @@ import { Route as rootRouteImport } from './routes/__root'
 import { Route as IndexRouteImport } from './routes/index'
 import { Route as SelfieRouteImport } from './routes/selfie'
 import { Route as WorldRouteImport } from './routes/world'
+import { Route as ApiEnhanceRouteImport } from './routes/api/enhance'
 
 const IndexRoute = IndexRouteImport.update({
   id: '/',
@@ -28,35 +29,44 @@ const WorldRoute = WorldRouteImport.update({
   path: '/world',
   getParentRoute: () => rootRouteImport,
 } as any)
+const ApiEnhanceRoute = ApiEnhanceRouteImport.update({
+  id: '/api/enhance',
+  path: '/api/enhance',
+  getParentRoute: () => rootRouteImport,
+} as any)
 
 export interface FileRoutesByFullPath {
   '/': typeof IndexRoute
   '/selfie': typeof SelfieRoute
   '/world': typeof WorldRoute
+  '/api/enhance': typeof ApiEnhanceRoute
 }
 export interface FileRoutesByTo {
   '/': typeof IndexRoute
   '/selfie': typeof SelfieRoute
   '/world': typeof WorldRoute
+  '/api/enhance': typeof ApiEnhanceRoute
 }
 export interface FileRoutesById {
   __root__: typeof rootRouteImport
   '/': typeof IndexRoute
   '/selfie': typeof SelfieRoute
   '/world': typeof WorldRoute
+  '/api/enhance': typeof ApiEnhanceRoute
 }
 export interface FileRouteTypes {
   fileRoutesByFullPath: FileRoutesByFullPath
-  fullPaths: '/' | '/selfie' | '/world'
+  fullPaths: '/' | '/selfie' | '/world' | '/api/enhance'
   fileRoutesByTo: FileRoutesByTo
-  to: '/' | '/selfie' | '/world'
-  id: '__root__' | '/' | '/selfie' | '/world'
+  to: '/' | '/selfie' | '/world' | '/api/enhance'
+  id: '__root__' | '/' | '/selfie' | '/world' | '/api/enhance'
   fileRoutesById: FileRoutesById
 }
 export interface RootRouteChildren {
   IndexRoute: typeof IndexRoute
   SelfieRoute: typeof SelfieRoute
   WorldRoute: typeof WorldRoute
+  ApiEnhanceRoute: typeof ApiEnhanceRoute
 }
 
 declare module '@tanstack/react-router' {
@@ -82,6 +92,13 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof WorldRouteImport
       parentRoute: typeof rootRouteImport
     }
+    '/api/enhance': {
+      id: '/api/enhance'
+      path: '/api/enhance'
+      fullPath: '/api/enhance'
+      preLoaderRoute: typeof ApiEnhanceRouteImport
+      parentRoute: typeof rootRouteImport
+    }
   }
 }
 
@@ -89,6 +106,7 @@ const rootRouteChildren: RootRouteChildren = {
   IndexRoute: IndexRoute,
   SelfieRoute: SelfieRoute,
   WorldRoute: WorldRoute,
+  ApiEnhanceRoute: ApiEnhanceRoute,
 }
 export const routeTree = rootRouteImport
   ._addFileChildren(rootRouteChildren)
