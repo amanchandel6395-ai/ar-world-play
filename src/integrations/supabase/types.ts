@@ -14,7 +14,33 @@ export type Database = {
   }
   public: {
     Tables: {
-      [_ in never]: never
+      shares: {
+        Row: {
+          ai_generated: boolean
+          created_at: string
+          expires_at: string
+          kind: string
+          path: string
+          token: string
+        }
+        Insert: {
+          ai_generated?: boolean
+          created_at?: string
+          expires_at: string
+          kind?: string
+          path: string
+          token: string
+        }
+        Update: {
+          ai_generated?: boolean
+          created_at?: string
+          expires_at?: string
+          kind?: string
+          path?: string
+          token?: string
+        }
+        Relationships: []
+      }
     }
     Views: {
       [_ in never]: never
