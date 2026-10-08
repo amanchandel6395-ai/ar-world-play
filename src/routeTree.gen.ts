@@ -13,6 +13,7 @@ import { Route as IndexRouteImport } from './routes/index'
 import { Route as SelfieRouteImport } from './routes/selfie'
 import { Route as WorldRouteImport } from './routes/world'
 import { Route as ApiEnhanceRouteImport } from './routes/api/enhance'
+import { Route as ApiVideoRouteImport } from './routes/api/video'
 import { Route as ExperienceSceneRouteImport } from './routes/experience.$scene'
 import { Route as RTokenRouteImport } from './routes/r.$token'
 
@@ -36,6 +37,11 @@ const ApiEnhanceRoute = ApiEnhanceRouteImport.update({
   path: '/api/enhance',
   getParentRoute: () => rootRouteImport,
 } as any)
+const ApiVideoRoute = ApiVideoRouteImport.update({
+  id: '/api/video',
+  path: '/api/video',
+  getParentRoute: () => rootRouteImport,
+} as any)
 const ExperienceSceneRoute = ExperienceSceneRouteImport.update({
   id: '/experience/$scene',
   path: '/experience/$scene',
@@ -52,6 +58,7 @@ export interface FileRoutesByFullPath {
   '/selfie': typeof SelfieRoute
   '/world': typeof WorldRoute
   '/api/enhance': typeof ApiEnhanceRoute
+  '/api/video': typeof ApiVideoRoute
   '/experience/$scene': typeof ExperienceSceneRoute
   '/r/$token': typeof RTokenRoute
 }
@@ -60,6 +67,7 @@ export interface FileRoutesByTo {
   '/selfie': typeof SelfieRoute
   '/world': typeof WorldRoute
   '/api/enhance': typeof ApiEnhanceRoute
+  '/api/video': typeof ApiVideoRoute
   '/experience/$scene': typeof ExperienceSceneRoute
   '/r/$token': typeof RTokenRoute
 }
@@ -69,6 +77,7 @@ export interface FileRoutesById {
   '/selfie': typeof SelfieRoute
   '/world': typeof WorldRoute
   '/api/enhance': typeof ApiEnhanceRoute
+  '/api/video': typeof ApiVideoRoute
   '/experience/$scene': typeof ExperienceSceneRoute
   '/r/$token': typeof RTokenRoute
 }
@@ -79,6 +88,7 @@ export interface FileRouteTypes {
     | '/selfie'
     | '/world'
     | '/api/enhance'
+    | '/api/video'
     | '/experience/$scene'
     | '/r/$token'
   fileRoutesByTo: FileRoutesByTo
@@ -87,6 +97,7 @@ export interface FileRouteTypes {
     | '/selfie'
     | '/world'
     | '/api/enhance'
+    | '/api/video'
     | '/experience/$scene'
     | '/r/$token'
   id:
@@ -95,6 +106,7 @@ export interface FileRouteTypes {
     | '/selfie'
     | '/world'
     | '/api/enhance'
+    | '/api/video'
     | '/experience/$scene'
     | '/r/$token'
   fileRoutesById: FileRoutesById
@@ -104,6 +116,7 @@ export interface RootRouteChildren {
   SelfieRoute: typeof SelfieRoute
   WorldRoute: typeof WorldRoute
   ApiEnhanceRoute: typeof ApiEnhanceRoute
+  ApiVideoRoute: typeof ApiVideoRoute
   ExperienceSceneRoute: typeof ExperienceSceneRoute
   RTokenRoute: typeof RTokenRoute
 }
@@ -138,6 +151,13 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof ApiEnhanceRouteImport
       parentRoute: typeof rootRouteImport
     }
+    '/api/video': {
+      id: '/api/video'
+      path: '/api/video'
+      fullPath: '/api/video'
+      preLoaderRoute: typeof ApiVideoRouteImport
+      parentRoute: typeof rootRouteImport
+    }
     '/experience/$scene': {
       id: '/experience/$scene'
       path: '/experience/$scene'
@@ -160,6 +180,7 @@ const rootRouteChildren: RootRouteChildren = {
   SelfieRoute: SelfieRoute,
   WorldRoute: WorldRoute,
   ApiEnhanceRoute: ApiEnhanceRoute,
+  ApiVideoRoute: ApiVideoRoute,
   ExperienceSceneRoute: ExperienceSceneRoute,
   RTokenRoute: RTokenRoute,
 }
