@@ -49,6 +49,8 @@ export type Interaction = {
   /** internal, server only */
   imagePrompt: string;
   videoPrompt: string;
+  /** short internal action phrase used by default prompts */
+  action: string;
 };
 
 export type AppConfig = {
@@ -63,7 +65,7 @@ export type AppConfig = {
 export type PublicConfig = {
   characters: Record<CharacterId, Omit<Character, "reference"> & { hasReference: boolean }>;
   bjp: BjpItem[];
-  interactions: Omit<Interaction, "imagePrompt" | "videoPrompt">[];
+  interactions: Omit<Interaction, "imagePrompt" | "videoPrompt" | "action">[];
   ai: { imageEnabled: boolean; videoEnabled: boolean; imageReady: boolean; videoReady: boolean };
   brand: AppConfig["brand"];
 };
@@ -88,8 +90,9 @@ const ix = (id: InteractionId, icon: string, en: string, hi: string, action: str
   enabled: true,
   icon,
   label: { en, hi },
-  imagePrompt: `Create a photorealistic vertical 9:16 photo of the customer from the captured photo ${action} together with the person shown in the authorized reference image. Keep the customer's face, skin tone, hair and clothing exactly recognizable. Natural lighting, sharp focus, respectful and dignified.`,
-  videoPrompt: `A short photorealistic vertical video: the customer from the photo ${action} with the person from the reference image, in a single continuous shot, gentle camera movement, warm natural light, soft ambient crowd sound. No dialogue. Keep both faces exactly recognizable.`,
+  imagePrompt: "",
+  videoPrompt: "",
+  action,
 });
 
 export const DEFAULT_CONFIG: AppConfig = {
@@ -111,10 +114,8 @@ export const DEFAULT_CONFIG: AppConfig = {
     imageEnabled: true,
     videoEnabled: true,
     videoDuration: 6,
-    bjpImagePrompt:
-      "Enhance this vertical 9:16 photo with festive saffron and green stage lighting and a soft bokeh background. Keep the person, face, pose, cap and scarf exactly as they are.",
-    bjpVideoPrompt:
-      "The person in the photo smiles and waves at a festive saffron and green rally, single continuous shot, gentle push-in, cheerful crowd ambience. No dialogue. Keep the face exactly recognizable.",
+    bjpImagePrompt: "",
+    bjpVideoPrompt: "",
   },
   brand: {
     title: "ZUITAR",
@@ -142,11 +143,11 @@ export function mergeConfig(stored: unknown): AppConfig {
 
 export function toPublicDefault(): PublicConfig {
   const c = DEFAULT_CONFIG;
-  const pc = (x: Character) => ({ ...x, reference: undefined, hasReference: false });
+  const pc = ({ reference: _r, ...x }: Character) => ({ ...x, hasReference: false });
   return {
     characters: { yogi: pc(c.characters.yogi), modi: pc(c.characters.modi) },
     bjp: c.bjp,
-    interactions: c.interactions.map(({ imagePrompt: _a, videoPrompt: _b, ...r }) => r),
+    interactions: c.interactions.map(({ imagePrompt: _a, videoPrompt: _b, action: _c, ...r }) => r),
     ai: { imageEnabled: false, videoEnabled: false, imageReady: false, videoReady: false },
     brand: c.brand,
   };
