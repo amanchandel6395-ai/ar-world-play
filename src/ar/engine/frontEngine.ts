@@ -331,6 +331,7 @@ export async function startFrontEngine(opts: {
             maskTex.minFilter = maskTex.magFilter = THREE.LinearFilter;
             maskTex.unpackAlignment = 1;
             personMat.uniforms["uMask"]!.value = maskTex;
+            bgMat.uniforms["uMask"]!.value = maskTex;
           }
           for (let i = 0; i < f.length; i++) maskBuf[i] = f[i]! * 255;
           maskTex.needsUpdate = true;
