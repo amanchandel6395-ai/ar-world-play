@@ -1,5 +1,6 @@
 import * as THREE from "three";
-import type { BodyState, SceneConfig, TrackingFrame } from "../scenes/types";
+import type { BodyState, SceneConfig, SceneContext, TrackingFrame, ViewBounds } from "../scenes/types";
+import type { InteractionId } from "@/lib/config";
 
 const WASM = "https://cdn.jsdelivr.net/npm/@mediapipe/tasks-vision@1.1.0/wasm";
 const FACE_MODEL =
@@ -30,6 +31,13 @@ export type EngineHandle = {
   stop(): void;
   capture(): Promise<Blob>;
   setSegmentation(on: boolean): void;
+  /** Re-runs automatic side choice / snaps the companion back into frame. */
+  resetPlacement(): void;
+  setInteraction(id: InteractionId): void;
+  /** Rear-camera torch where the browser exposes it. */
+  torchSupported: boolean;
+  setTorch(on: boolean): Promise<boolean>;
+  standIn: boolean;
 };
 
 /**
@@ -42,6 +50,7 @@ export async function startFrontEngine(opts: {
   canvas: HTMLCanvasElement;
   scene: SceneConfig;
   facing: "user" | "environment";
+  ctx: SceneContext;
   onStatus(s: EngineStatus): void;
 }): Promise<EngineHandle> {
   const { video, canvas, scene, facing } = opts;
@@ -65,12 +74,32 @@ export async function startFrontEngine(opts: {
   const push = () => !stopped && opts.onStatus({ ...st });
   push();
 
+  const portrait = window.innerHeight > window.innerWidth;
   const stream = await navigator.mediaDevices.getUserMedia({
-    video: { facingMode: facing, width: { ideal: 1280 }, height: { ideal: 720 } },
+    video: {
+      facingMode: facing,
+      width: { ideal: portrait ? 720 : 1280 },
+      height: { ideal: portrait ? 1280 : 720 },
+    },
     audio: false,
   });
+  const cleanupStream = () => {
+    stream.getTracks().forEach((t) => t.stop());
+    video.srcObject = null;
+  };
+  try {
+    return await run(stream, cleanupStream);
+  } catch (e) {
+    cleanupStream();
+    if (e instanceof Error && e.name === "Error") e.name = "EngineError";
+    throw e;
+  }
+
+  async function run(stream: MediaStream, cleanupStream: () => void): Promise<EngineHandle> {
   video.srcObject = stream;
   await video.play();
+  const track = stream.getVideoTracks()[0];
+  const trackCaps = (track?.getCapabilities?.() ?? {}) as MediaTrackCapabilities & { torch?: boolean };
   const vw = video.videoWidth;
   const vh = video.videoHeight;
   st.camera = true;
@@ -97,11 +126,18 @@ export async function startFrontEngine(opts: {
       uVideo: { value: vtex },
       uTint: { value: new THREE.Vector3(...(tint ?? [0, 0, 0])) },
       uAmt: { value: tint ? 0.42 : 0 },
+      uMask: { value: maskTex },
+      uBg: { value: null as THREE.Texture | null },
+      uBgOn: { value: 0 },
     },
     vertexShader: `varying vec2 vUv; void main(){ vUv = uv; gl_Position = vec4(position.xy, 0.0, 1.0); }`,
-    fragmentShader: `uniform sampler2D uVideo; uniform vec3 uTint; uniform float uAmt; varying vec2 vUv;
+    fragmentShader: `uniform sampler2D uVideo; uniform sampler2D uMask; uniform sampler2D uBg; uniform float uBgOn;
+      uniform vec3 uTint; uniform float uAmt; varying vec2 vUv;
       void main(){ vec3 c = texture2D(uVideo, vUv).rgb; float g = smoothstep(0.0, 1.0, vUv.y);
-      vec3 t = mix(uTint, vec3(0.07,0.54,0.24), 1.0 - g); gl_FragColor = vec4(mix(c, c*0.5 + t*0.6, uAmt), 1.0); }`,
+      vec3 t = mix(uTint, vec3(0.07,0.54,0.24), 1.0 - g); c = mix(c, c*0.5 + t*0.6, uAmt);
+      if (uBgOn > 0.5) { float m = smoothstep(0.35, 0.75, texture2D(uMask, vec2(vUv.x, 1.0 - vUv.y)).r);
+        c = mix(texture2D(uBg, vUv).rgb, c, m); }
+      gl_FragColor = vec4(c, 1.0); }`,
   });
   const bgScene = new THREE.Scene();
   bgScene.add(new THREE.Mesh(quad, bgMat));
@@ -126,7 +162,14 @@ export async function startFrontEngine(opts: {
   const front = new THREE.Group();
   backScene.add(back);
   frontScene.add(front);
-  const runtime = scene.build({ back, front });
+  const runtime = scene.build({ back, front }, opts.ctx) as ReturnType<SceneConfig["build"]> & { backgroundUrl?: string };
+  if (runtime.backgroundUrl) {
+    new THREE.TextureLoader().setCrossOrigin("anonymous").load(runtime.backgroundUrl, (t) => {
+      t.colorSpace = THREE.SRGBColorSpace;
+      bgMat.uniforms["uBg"]!.value = t;
+      bgMat.uniforms["uBgOn"]!.value = 1;
+    });
+  }
 
   const vision = await import("@mediapipe/tasks-vision");
   const fileset = await vision.FilesetResolver.forVisionTasks(WASM);
@@ -139,6 +182,8 @@ export async function startFrontEngine(opts: {
       return await fn("CPU");
     }
   };
+  st.stage = "loading models";
+  push();
   const faceL = await make((delegate) =>
     vision.FaceLandmarker.createFromOptions(fileset, {
       baseOptions: { modelAssetPath: FACE_MODEL, delegate },
@@ -177,6 +222,25 @@ export async function startFrontEngine(opts: {
   const unproject = (u: number, v: number, z: number) =>
     new THREE.Vector3((u - 0.5) * 2 * tanHalf * aspect * -z, -(v - 0.5) * 2 * tanHalf * -z, z);
 
+  const project = (p: THREE.Vector3) => {
+    const d = Math.max(1, -p.z);
+    return { u: p.x / (2 * tanHalf * aspect * d) + 0.5, v: 0.5 - p.y / (2 * tanHalf * d) };
+  };
+  /** Visible region of the video after object-cover cropping into the on-screen canvas. */
+  const view: ViewBounds = { uMin: 0, uMax: 1, vMin: 0, vMax: 1 };
+  const updateView = () => {
+    const cw = canvas.clientWidth || vw;
+    const ch = canvas.clientHeight || vh;
+    const A = cw / ch;
+    if (A < aspect) {
+      const f = A / aspect;
+      Object.assign(view, { uMin: 0.5 - f / 2, uMax: 0.5 + f / 2, vMin: 0, vMax: 1 });
+    } else {
+      const f = aspect / A;
+      Object.assign(view, { uMin: 0, uMax: 1, vMin: 0.5 - f / 2, vMax: 0.5 + f / 2 });
+    }
+  };
+
   const faceMat = new THREE.Matrix4();
   let lastZ = -60;
   let maskBuf: Uint8Array | null = null;
@@ -185,7 +249,18 @@ export async function startFrontEngine(opts: {
   let fpsT = performance.now();
   let lastPush = 0;
   let lastT = performance.now();
-  const frame: TrackingFrame = { faceMatrix: null, head: null, shoulders: null, bodyState: "unknown", distanceCm: null, dt: 0 };
+  const frame: TrackingFrame = {
+    faceMatrix: null,
+    head: null,
+    shoulders: null,
+    bodyState: "unknown",
+    distanceCm: null,
+    dt: 0,
+    view,
+    mirrored: facing === "user",
+    unproject,
+    project,
+  };
 
   const loop = () => {
     if (stopped) return;
@@ -193,6 +268,7 @@ export async function startFrontEngine(opts: {
     const now = performance.now();
     frame.dt = Math.min(0.1, (now - lastT) / 1000);
     lastT = now;
+    updateView();
 
     if (video.currentTime !== lastVideoTime) {
       lastVideoTime = video.currentTime;
@@ -294,16 +370,40 @@ export async function startFrontEngine(opts: {
     setSegmentation(on) {
       segOn = on;
     },
+    resetPlacement() {
+      runtime.reset?.();
+    },
+    setInteraction(id) {
+      runtime.setInteraction?.(id);
+    },
+    get standIn() {
+      return !!runtime.standIn;
+    },
+    torchSupported: facing === "environment" && !!trackCaps.torch,
+    async setTorch(on) {
+      try {
+        await track?.applyConstraints({ advanced: [{ torch: on } as MediaTrackConstraintSet] });
+        return true;
+      } catch {
+        return false;
+      }
+    },
     capture() {
+      // Capture exactly what the user sees: the visible (cropped) part, mirrored like the preview.
+      updateView();
+      const sx = view.uMin * canvas.width;
+      const sy = view.vMin * canvas.height;
+      const sw = (view.uMax - view.uMin) * canvas.width;
+      const sh = (view.vMax - view.vMin) * canvas.height;
       const out = document.createElement("canvas");
-      out.width = canvas.width;
-      out.height = canvas.height;
+      out.width = Math.round(sw);
+      out.height = Math.round(sh);
       const g = out.getContext("2d")!;
       if (facing === "user") {
         g.translate(out.width, 0);
         g.scale(-1, 1);
       }
-      g.drawImage(canvas, 0, 0);
+      g.drawImage(canvas, sx, sy, sw, sh, 0, 0, out.width, out.height);
       return new Promise((resolve, reject) =>
         out.toBlob((b) => (b ? resolve(b) : reject(new Error("capture failed"))), "image/jpeg", 0.92),
       );
@@ -311,12 +411,20 @@ export async function startFrontEngine(opts: {
     stop() {
       stopped = true;
       cancelAnimationFrame(raf);
-      stream.getTracks().forEach((t) => t.stop());
+      cleanupStream();
       faceL.close();
       poseL.close();
       segL.close();
       runtime.dispose?.();
+      vtex.dispose();
+      maskTex.dispose();
+      (bgMat.uniforms["uBg"]!.value as THREE.Texture | null)?.dispose();
+      bgMat.dispose();
+      personMat.dispose();
+      quad.dispose();
       renderer.dispose();
+      renderer.forceContextLoss();
     },
   };
+  }
 }
