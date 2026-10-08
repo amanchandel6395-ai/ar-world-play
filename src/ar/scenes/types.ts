@@ -1,9 +1,13 @@
 import type * as THREE from "three";
+import type { InteractionId, PublicConfig } from "@/lib/config";
 
 export type AssetType = "placeholder-3d" | "transparent-2d" | "multi-pose-2d" | "rigged-3d";
 export type TrackingMode = "face" | "body" | "face+body";
 export type AnchorKind = "beside-user" | "head" | "shoulders" | "floor";
 export type BodyState = "standing" | "sitting" | "partial" | "unknown";
+
+/** Visible part of the video (normalized 0..1) after object-cover cropping to the viewport. */
+export type ViewBounds = { uMin: number; uMax: number; vMin: number; vMax: number };
 
 /** Live tracking data handed to scenes every frame. Units: cm, MediaPipe face-geometry camera space. */
 export type TrackingFrame = {
@@ -13,6 +17,11 @@ export type TrackingFrame = {
   bodyState: BodyState;
   distanceCm: number | null;
   dt: number;
+  view: ViewBounds;
+  /** normalized image point → camera-space point at depth z (cm, negative) */
+  unproject(u: number, v: number, z: number): THREE.Vector3;
+  /** camera-space point → normalized image point */
+  project(p: THREE.Vector3): { u: number; v: number };
 };
 
 export type SceneLayers = {
@@ -22,30 +31,27 @@ export type SceneLayers = {
   front: THREE.Group;
 };
 
-export type SceneRuntime = { update(t: TrackingFrame): void; dispose?(): void };
+export type SceneContext = { config: PublicConfig; interaction: InteractionId };
+
+export type SceneRuntime = {
+  update(t: TrackingFrame): void;
+  setInteraction?(id: InteractionId): void;
+  reset?(): void;
+  dispose?(): void;
+  /** true when the scene currently shows a development stand-in instead of an authorized asset */
+  standIn?: boolean;
+};
 
 export type SceneConfig = {
   id: "yogi" | "modi" | "bjp";
-  title: string;
-  subtitle: string;
-  asset: {
-    type: AssetType;
-    /** URL of the authorized asset (GLB / PNG set). null until a licensed asset is connected. */
-    url: string | null;
-    authorized: boolean;
-    label: string;
-  };
   tracking: TrackingMode;
   anchor: AnchorKind;
-  scale: number;
-  /** Offset from anchor, cm. x is user-relative side. */
-  position: { x: number; y: number; z: number };
   occlusion: "segmentation" | "none";
   camera: { default: "user" | "environment"; worldAR: boolean };
   effects: { backgroundTint?: [number, number, number] | null };
-  capture: { countdown: number; aiEnhance: boolean; aiPrompt: string };
+  capture: { countdown: number };
   /** Builds 3D content into the shared engine layers. Never duplicates camera/tracking. */
-  build(layers: SceneLayers): SceneRuntime;
+  build(layers: SceneLayers, ctx: SceneContext): SceneRuntime;
   /** Builds a metre-scale object for world AR placement (optional). */
-  buildWorld?(): THREE.Object3D;
+  buildWorld?(ctx: SceneContext): THREE.Object3D;
 };
