@@ -21,7 +21,13 @@ export function WorldAR({
   buildSubject,
   onExit,
   showDebug = true,
-}: { buildSubject?: (() => THREE.Object3D) | undefined; onExit?: () => void; showDebug?: boolean } = {}) {
+  hints,
+}: {
+  buildSubject?: (() => THREE.Object3D) | undefined;
+  onExit?: () => void;
+  showDebug?: boolean;
+  hints?: { moveSlow: string; pointFloor: string; tapPlace: string };
+} = {}) {
   const canvasRef = useRef<HTMLCanvasElement>(null);
   const overlayRef = useRef<HTMLDivElement>(null);
   const sessionRef = useRef<any>(null);
@@ -246,6 +252,11 @@ export function WorldAR({
           </div>
         </div>
 
+        {dbg.session && hints && !dbg.placed && (
+          <div className="mx-auto mb-10 rounded-full bg-overlay px-6 py-3 text-lg font-semibold text-foreground">
+            {!dbg.tracking ? hints.moveSlow : !dbg.hit ? hints.pointFloor : hints.tapPlace}
+          </div>
+        )}
         {!dbg.session && (
           <div className="pointer-events-auto mx-auto w-full max-w-md rounded-md border border-border bg-card p-5 font-mono text-xs leading-5">
             {dbg.supported === "yes" && (

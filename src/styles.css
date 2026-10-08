@@ -51,7 +51,7 @@
   --color-saffron: var(--saffron);
   --color-gold: var(--gold);
   --color-leaf: var(--leaf);
-  --font-sans: "Space Grotesk", ui-sans-serif, system-ui, sans-serif;
+  --font-sans: "Space Grotesk", "Noto Sans Devanagari", ui-sans-serif, system-ui, sans-serif;
   --font-mono: "JetBrains Mono", ui-monospace, monospace;
   --color-chart-1: var(--chart-1);
   --color-chart-2: var(--chart-2);
