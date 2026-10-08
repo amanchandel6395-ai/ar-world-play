@@ -18,6 +18,8 @@ export type TrackingFrame = {
   distanceCm: number | null;
   dt: number;
   view: ViewBounds;
+  /** true when the canvas is displayed mirrored (front camera) */
+  mirrored: boolean;
   /** normalized image point → camera-space point at depth z (cm, negative) */
   unproject(u: number, v: number, z: number): THREE.Vector3;
   /** camera-space point → normalized image point */

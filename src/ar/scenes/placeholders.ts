@@ -449,7 +449,7 @@ export function worldCompanion(ctx: SceneContext, ch: PubChar, color: number) {
   else {
     const a = authorizedContent(ch, (o) => { holder.clear(); holder.add(o); }, standIn);
     a.setInteraction(ctx.interaction);
-    g.onBeforeRender = () => a.tick(1 / 60);
+    disc.onBeforeRender = () => a.tick(1 / 60);
   }
   return g;
 }
