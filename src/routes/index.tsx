@@ -159,7 +159,7 @@ function Home() {
         </button>
       </header>
 
-      <div className="mx-auto mt-8 grid w-full max-w-7xl flex-1 gap-4 md:mt-12 md:grid-cols-3 md:gap-6">
+      <div className="mx-auto mt-8 grid w-full max-w-7xl flex-1 gap-4 md:mt-12 sm:grid-cols-2 xl:grid-cols-3 md:gap-6">
         {cards.map((c, i) => (
           <Link
             key={c.id}
