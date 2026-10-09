@@ -37,6 +37,8 @@ function Home() {
   const [photo, setPhoto] = useState<string | null>(null);
   const [cameraError, setCameraError] = useState<string | null>(null);
   const [cameraReady, setCameraReady] = useState(false);
+  const [facingMode, setFacingMode] = useState<"user" | "environment">("user");
+  const [canFlipCamera, setCanFlipCamera] = useState(false);
   const videoRef = useRef<HTMLVideoElement | null>(null);
   const canvasRef = useRef<HTMLCanvasElement | null>(null);
   const streamRef = useRef<MediaStream | null>(null);
@@ -44,6 +46,7 @@ function Home() {
 
   useEffect(() => {
     fetchConfig().then((c) => setReady(c.ready)).catch(() => setReady(null));
+    setCanFlipCamera(window.matchMedia("(pointer: coarse)").matches);
   }, [fetchConfig]);
 
   useEffect(() => {
@@ -57,7 +60,7 @@ function Home() {
       return;
     }
 
-    navigator.mediaDevices.getUserMedia({ video: { facingMode: "user" }, audio: false })
+    navigator.mediaDevices.getUserMedia({ video: { facingMode }, audio: false })
       .then((stream) => {
         if (!active) {
           stream.getTracks().forEach((track) => track.stop());
@@ -81,19 +84,19 @@ function Home() {
       streamRef.current?.getTracks().forEach((track) => track.stop());
       streamRef.current = null;
     };
-  }, [boothOpen, photo, isHindi]);
+  }, [boothOpen, photo, isHindi, facingMode]);
 
-  const capturePhoto = () => {
-    const video = videoRef.current;
+  const finishPhoto = (source: CanvasImageSource, width: number, height: number) => {
     const canvas = canvasRef.current;
-    if (!video || !canvas || !video.videoWidth || !video.videoHeight) return;
+    if (!canvas || !width || !height) return;
 
-    canvas.width = video.videoWidth;
-    canvas.height = video.videoHeight;
+    const scale = Math.min(1, 2048 / Math.max(width, height));
+    canvas.width = Math.round(width * scale);
+    canvas.height = Math.round(height * scale);
     const context = canvas.getContext("2d");
     if (!context) return;
 
-    context.drawImage(video, 0, 0, canvas.width, canvas.height);
+    context.drawImage(source, 0, 0, canvas.width, canvas.height);
     const footerHeight = Math.max(62, Math.round(canvas.width * 0.12));
     context.fillStyle = "#111827";
     context.fillRect(0, canvas.height - footerHeight, canvas.width, footerHeight);
@@ -102,8 +105,31 @@ function Home() {
     context.textBaseline = "middle";
     context.fillText("ZUITAR · PHOTO BOOTH DEMO", Math.round(canvas.width * 0.05), canvas.height - footerHeight / 2);
     setPhoto(canvas.toDataURL("image/jpeg", 0.92));
+    setCameraReady(false);
     streamRef.current?.getTracks().forEach((track) => track.stop());
     streamRef.current = null;
+  };
+
+  const capturePhoto = () => {
+    const video = videoRef.current;
+    if (!video || !video.videoWidth || !video.videoHeight) return;
+    finishPhoto(video, video.videoWidth, video.videoHeight);
+  };
+
+  const choosePhoto = async (file?: File) => {
+    if (!file) return;
+    if (!file.type.startsWith("image/")) {
+      setCameraError(isHindi ? "कृपया image फ़ाइल चुनें।" : "Please choose an image file.");
+      return;
+    }
+    try {
+      const bitmap = await createImageBitmap(file);
+      finishPhoto(bitmap, bitmap.width, bitmap.height);
+      bitmap.close();
+      setCameraError(null);
+    } catch {
+      setCameraError(isHindi ? "यह फोटो खुल नहीं सकी। दूसरी image चुनें।" : "This photo could not be opened. Choose another image.");
+    }
   };
 
   const press = useRef<number | null>(null);
@@ -165,8 +191,8 @@ function Home() {
             <h2 className="text-xl font-bold md:text-2xl">{isHindi ? "अपना फोटो बूथ डेमो" : "Try the photo booth demo"}</h2>
             <p className="mt-1 max-w-2xl text-sm text-muted-foreground md:text-base">
               {isHindi
-                ? "अपनी कैमरा फोटो लें, फिर दोबारा लें या डाउनलोड करें। इसमें AI edit या दूसरा व्यक्ति नहीं जोड़ा जाता।"
-                : "Take a photo with your camera, retake it, or download it. No AI edits or other people are added."}
+                ? "फोन या लैपटॉप के कैमरे से फोटो लें, या फोटो चुनें। फिर दोबारा लें या डाउनलोड करें। इसमें AI edit या दूसरा व्यक्ति नहीं जोड़ा जाता।"
+                : "Use a phone or laptop camera, or choose a photo to retake or download. No AI edits or other people are added."}
             </p>
           </div>
           <button onClick={() => { setPhoto(null); setBoothOpen(true); }} className="zt-btn-primary shrink-0">
@@ -217,13 +243,32 @@ function Home() {
             <div className="mt-5 flex flex-wrap justify-center gap-3">
               {photo ? (
                 <>
-                  <button onClick={() => setPhoto(null)} className="zt-btn-ghost">{isHindi ? "दोबारा लें" : "Retake"}</button>
+                  <button onClick={() => { setPhoto(null); setCameraError(null); }} className="zt-btn-ghost">{isHindi ? "दोबारा लें" : "Retake"}</button>
                   <a href={photo} download="zuitar-photo-booth.jpg" className="zt-btn-primary">{isHindi ? "डाउनलोड" : "Download photo"}</a>
                 </>
               ) : (
-                <button onClick={capturePhoto} disabled={!cameraReady || !!cameraError} className="zt-btn-primary disabled:cursor-not-allowed disabled:opacity-50">
-                  {isHindi ? "फोटो लें" : "Capture photo"}
-                </button>
+                <>
+                  <button onClick={capturePhoto} disabled={!cameraReady || !!cameraError} className="zt-btn-primary disabled:cursor-not-allowed disabled:opacity-50">
+                    {isHindi ? "फोटो लें" : "Capture photo"}
+                  </button>
+                  {canFlipCamera && cameraReady && !cameraError && (
+                    <button
+                      onClick={() => { setCameraReady(false); setFacingMode((mode) => mode === "user" ? "environment" : "user"); }}
+                      className="zt-btn-ghost"
+                    >
+                      {isHindi ? "कैमरा बदलें" : "Flip camera"}
+                    </button>
+                  )}
+                  <label className="zt-btn-ghost cursor-pointer">
+                    {isHindi ? "फोटो चुनें" : "Choose photo"}
+                    <input
+                      type="file"
+                      accept="image/*"
+                      className="sr-only"
+                      onChange={(event) => { void choosePhoto(event.currentTarget.files?.[0]); event.currentTarget.value = ""; }}
+                    />
+                  </label>
+                </>
               )}
             </div>
           </section>
