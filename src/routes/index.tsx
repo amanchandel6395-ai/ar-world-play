@@ -228,8 +228,8 @@ function Home() {
             <h2 className="text-xl font-bold md:text-2xl">{isHindi ? "अपना फोटो बूथ डेमो" : "Try the photo booth demo"}</h2>
             <p className="mt-1 max-w-2xl text-sm text-muted-foreground md:text-base">
               {isHindi
-                ? "फोन या लैपटॉप के कैमरे से फोटो लें, या फोटो चुनें। फिर दोबारा लें या डाउनलोड करें। इसमें AI edit या दूसरा व्यक्ति नहीं जोड़ा जाता।"
-                : "Use a phone or laptop camera, or choose a photo to retake or download. No AI edits or other people are added."}
+                ? "फोन या लैपटॉप से फोटो लें या चुनें, AI से हल्का सुधारें और डाउनलोड करें। कोई दूसरा व्यक्ति या राजनीतिक नेता नहीं जोड़ा जाता।"
+                : "Take or choose a photo on your phone or laptop, enhance it with AI, and download it. No extra people or political leaders are added."}
             </p>
           </div>
           <button onClick={() => { setPhoto(null); setBoothOpen(true); }} className="zt-btn-primary shrink-0">
