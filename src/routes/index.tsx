@@ -33,9 +33,79 @@ function Home() {
   const [lang, setLang, t] = useLang();
   const fetchConfig = useServerFn(getPublicConfig);
   const [ready, setReady] = useState<PublicConfig["ready"] | null>(null);
+  const [boothOpen, setBoothOpen] = useState(false);
+  const [photo, setPhoto] = useState<string | null>(null);
+  const [cameraError, setCameraError] = useState<string | null>(null);
+  const [cameraReady, setCameraReady] = useState(false);
+  const videoRef = useRef<HTMLVideoElement | null>(null);
+  const canvasRef = useRef<HTMLCanvasElement | null>(null);
+  const streamRef = useRef<MediaStream | null>(null);
+  const isHindi = lang === "hi";
+
   useEffect(() => {
     fetchConfig().then((c) => setReady(c.ready)).catch(() => setReady(null));
   }, [fetchConfig]);
+
+  useEffect(() => {
+    if (!boothOpen || photo) return;
+    let active = true;
+    setCameraReady(false);
+    setCameraError(null);
+
+    if (!navigator.mediaDevices?.getUserMedia) {
+      setCameraError(isHindi ? "इस ब्राउज़र में कैमरा उपलब्ध नहीं है।" : "Camera access is not available in this browser.");
+      return;
+    }
+
+    navigator.mediaDevices.getUserMedia({ video: { facingMode: "user" }, audio: false })
+      .then((stream) => {
+        if (!active) {
+          stream.getTracks().forEach((track) => track.stop());
+          return;
+        }
+        streamRef.current = stream;
+        if (videoRef.current) videoRef.current.srcObject = stream;
+      })
+      .catch(() => {
+        if (active) {
+          setCameraError(
+            isHindi
+              ? "कैमरा शुरू नहीं हो सका। ब्राउज़र में camera permission दें और पेज HTTPS पर खोलें।"
+              : "Could not start the camera. Allow camera access in your browser and open this page over HTTPS.",
+          );
+        }
+      });
+
+    return () => {
+      active = false;
+      streamRef.current?.getTracks().forEach((track) => track.stop());
+      streamRef.current = null;
+    };
+  }, [boothOpen, photo, isHindi]);
+
+  const capturePhoto = () => {
+    const video = videoRef.current;
+    const canvas = canvasRef.current;
+    if (!video || !canvas || !video.videoWidth || !video.videoHeight) return;
+
+    canvas.width = video.videoWidth;
+    canvas.height = video.videoHeight;
+    const context = canvas.getContext("2d");
+    if (!context) return;
+
+    context.drawImage(video, 0, 0, canvas.width, canvas.height);
+    const footerHeight = Math.max(62, Math.round(canvas.width * 0.12));
+    context.fillStyle = "#111827";
+    context.fillRect(0, canvas.height - footerHeight, canvas.width, footerHeight);
+    context.fillStyle = "#fbbf24";
+    context.font = `600 ${Math.max(16, Math.round(canvas.width * 0.035))}px sans-serif`;
+    context.textBaseline = "middle";
+    context.fillText("ZUITAR · PHOTO BOOTH DEMO", Math.round(canvas.width * 0.05), canvas.height - footerHeight / 2);
+    setPhoto(canvas.toDataURL("image/jpeg", 0.92));
+    streamRef.current?.getTracks().forEach((track) => track.stop());
+    streamRef.current = null;
+  };
+
   const press = useRef<number | null>(null);
   const startPress = () => {
     press.current = window.setTimeout(() => {
@@ -89,6 +159,22 @@ function Home() {
         ))}
       </div>
 
+      <section className="mx-auto mt-7 w-full max-w-7xl rounded-3xl border border-border bg-card p-5 md:mt-9 md:p-7">
+        <div className="flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
+          <div>
+            <h2 className="text-xl font-bold md:text-2xl">{isHindi ? "अपना फोटो बूथ डेमो" : "Try the photo booth demo"}</h2>
+            <p className="mt-1 max-w-2xl text-sm text-muted-foreground md:text-base">
+              {isHindi
+                ? "अपनी कैमरा फोटो लें, फिर दोबारा लें या डाउनलोड करें। इसमें AI edit या दूसरा व्यक्ति नहीं जोड़ा जाता।"
+                : "Take a photo with your camera, retake it, or download it. No AI edits or other people are added."}
+            </p>
+          </div>
+          <button onClick={() => { setPhoto(null); setBoothOpen(true); }} className="zt-btn-primary shrink-0">
+            {isHindi ? "कैमरा खोलें" : "Open camera"}
+          </button>
+        </div>
+      </section>
+
       {dev && (
         <nav className="mx-auto mt-6 flex gap-3 font-mono text-xs text-muted-foreground">
           <Link to="/selfie" className="underline">engine test: selfie</Link>
@@ -97,6 +183,51 @@ function Home() {
       )}
       {flash && (
         <div className="fixed bottom-6 left-1/2 -translate-x-1/2 rounded-full bg-overlay px-5 py-2 text-sm">{flash}</div>
+      )}
+
+      {boothOpen && (
+        <div className="fixed inset-0 z-50 overflow-y-auto bg-stage/95 px-4 py-6 backdrop-blur-sm">
+          <section role="dialog" aria-modal="true" aria-labelledby="booth-title" className="mx-auto flex min-h-full w-full max-w-2xl flex-col rounded-3xl border border-border bg-card p-5 shadow-2xl md:p-7">
+            <div className="flex items-start justify-between gap-4">
+              <div>
+                <h2 id="booth-title" className="text-2xl font-bold">{isHindi ? "फोटो बूथ डेमो" : "Photo booth demo"}</h2>
+                <p className="mt-1 text-sm text-muted-foreground">{isHindi ? "फोटो आपके ब्राउज़र में ही रहती है।" : "Your photo stays in your browser."}</p>
+              </div>
+              <button aria-label={isHindi ? "बंद करें" : "Close"} onClick={() => setBoothOpen(false)} className="zt-btn-ghost">✕</button>
+            </div>
+
+            <div className="mt-5 flex min-h-64 flex-1 items-center justify-center overflow-hidden rounded-2xl bg-black">
+              {photo ? (
+                <img src={photo} alt={isHindi ? "आपकी ली गई फोटो" : "Your captured photo"} className="max-h-[65vh] w-full object-contain" />
+              ) : cameraError ? (
+                <p role="alert" className="max-w-md p-6 text-center text-sm text-white">{cameraError}</p>
+              ) : (
+                <video
+                  ref={videoRef}
+                  autoPlay
+                  playsInline
+                  muted
+                  onLoadedMetadata={() => setCameraReady(true)}
+                  className="max-h-[65vh] w-full object-contain"
+                />
+              )}
+            </div>
+            <canvas ref={canvasRef} className="hidden" />
+
+            <div className="mt-5 flex flex-wrap justify-center gap-3">
+              {photo ? (
+                <>
+                  <button onClick={() => setPhoto(null)} className="zt-btn-ghost">{isHindi ? "दोबारा लें" : "Retake"}</button>
+                  <a href={photo} download="zuitar-photo-booth.jpg" className="zt-btn-primary">{isHindi ? "डाउनलोड" : "Download photo"}</a>
+                </>
+              ) : (
+                <button onClick={capturePhoto} disabled={!cameraReady || !!cameraError} className="zt-btn-primary disabled:cursor-not-allowed disabled:opacity-50">
+                  {isHindi ? "फोटो लें" : "Capture photo"}
+                </button>
+              )}
+            </div>
+          </section>
+        </div>
       )}
     </main>
   );
