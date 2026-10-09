@@ -33,6 +33,7 @@ function Home() {
   const [lang, setLang, t] = useLang();
   const fetchConfig = useServerFn(getPublicConfig);
   const [ready, setReady] = useState<PublicConfig["ready"] | null>(null);
+  const [demoAiReady, setDemoAiReady] = useState(false);
   const [boothOpen, setBoothOpen] = useState(false);
   const [photo, setPhoto] = useState<string | null>(null);
   const [aiPhoto, setAiPhoto] = useState<string | null>(null);
@@ -50,7 +51,7 @@ function Home() {
   const displayedPhoto = showAi && aiPhoto ? aiPhoto : photo;
 
   useEffect(() => {
-    fetchConfig().then((c) => setReady(c.ready)).catch(() => setReady(null));
+    fetchConfig().then((c) => { setReady(c.ready); setDemoAiReady(c.demo.aiReady); }).catch(() => { setReady(null); setDemoAiReady(false); });
     setCanFlipCamera(window.matchMedia("(pointer: coarse)").matches);
   }, [fetchConfig]);
 
@@ -140,7 +141,7 @@ function Home() {
     }
   };
 
-  const enhancePhoto = async () => {
+  const enhancePhoto = async (scene: "photo" | "demo" = "photo") => {
     if (!photo || aiBusy) return;
     setAiBusy(true);
     setAiError(null);
@@ -148,7 +149,7 @@ function Home() {
       const image = await (await fetch(photo)).blob();
       const form = new FormData();
       form.append("image", image, "customer-photo.jpg");
-      form.append("scene", "photo");
+      form.append("scene", scene);
       form.append("interaction", "selfie");
       const response = await fetch("/api/enhance", { method: "POST", body: form });
       const result = (await response.json().catch(() => ({}))) as { b64?: string; code?: string };
@@ -228,8 +229,8 @@ function Home() {
             <h2 className="text-xl font-bold md:text-2xl">{isHindi ? "अपना फोटो बूथ डेमो" : "Try the photo booth demo"}</h2>
             <p className="mt-1 max-w-2xl text-sm text-muted-foreground md:text-base">
               {isHindi
-                ? "फोन या लैपटॉप से फोटो लें या चुनें, AI से हल्का सुधारें और डाउनलोड करें। कोई दूसरा व्यक्ति या राजनीतिक नेता नहीं जोड़ा जाता।"
-                : "Take or choose a photo on your phone or laptop, enhance it with AI, and download it. No extra people or political leaders are added."}
+                ? "फोन या लैपटॉप से फोटो लें या चुनें। AI से हल्का सुधारें या काल्पनिक रोबोट साथी वाला डेमो आज़माएँ, फिर डाउनलोड करें।"
+                : "Take or choose a photo on your phone or laptop. Try a faithful AI enhancement or add a fictional robot companion, then download it."}
             </p>
           </div>
           <button onClick={() => { setPhoto(null); setBoothOpen(true); }} className="zt-btn-primary shrink-0">
@@ -286,7 +287,8 @@ function Home() {
                 <>
                   <button onClick={() => { setPhoto(null); setAiPhoto(null); setShowAi(false); setAiError(null); setCameraError(null); }} className="zt-btn-ghost">{isHindi ? "दोबारा लें" : "Retake"}</button>
                   <a href={displayedPhoto ?? photo} download={showAi ? "zuitar-ai-photo.jpg" : "zuitar-photo-booth.jpg"} className="zt-btn-primary">{isHindi ? "डाउनलोड" : "Download photo"}</a>
-                  {!aiPhoto && <button onClick={() => void enhancePhoto()} disabled={aiBusy} className="zt-btn-secondary disabled:opacity-50">{isHindi ? "✦ AI से सुधारें" : "✦ Enhance with AI"}</button>}
+                  <button onClick={() => void enhancePhoto("photo")} disabled={aiBusy} className="zt-btn-secondary disabled:opacity-50">{isHindi ? "✦ AI से सुधारें" : "✦ Enhance with AI"}</button>
+                  {demoAiReady && <button onClick={() => void enhancePhoto("demo")} disabled={aiBusy} className="zt-btn-secondary disabled:opacity-50">{isHindi ? "✦ काल्पनिक साथी डेमो" : "✦ Fictional companion demo"}</button>}
                   {aiPhoto && <button onClick={() => setShowAi((value) => !value)} className="zt-btn-secondary">{showAi ? (isHindi ? "Original दिखाएँ" : "Show original") : (isHindi ? "AI photo दिखाएँ" : "Show AI photo")}</button>}
                 </>
               ) : (
