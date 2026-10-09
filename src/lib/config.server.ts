@@ -75,6 +75,7 @@ export async function toPublic(cfg: AppConfig): Promise<PublicConfig> {
     characters,
     bjp: usableBjp,
     interactions: cfg.interactions.map(({ imagePrompt: _a, videoPrompt: _b, action: _c, ...r }) => r),
+    demo: { aiReady: hasKey && cfg.demo.enabled },
     ai: {
       imageEnabled: cfg.ai.imageEnabled,
       videoEnabled: cfg.ai.videoEnabled,
