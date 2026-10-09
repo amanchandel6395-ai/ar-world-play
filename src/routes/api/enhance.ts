@@ -4,7 +4,7 @@ import { INTERACTIONS } from "@/lib/config";
 const GATEWAY = "https://ai.gateway.lovable.dev";
 const MODEL = "openai/gpt-image-2.5-sunburst";
 /** AI runs only for the BJP Look. Yogi/Modi scenes never get AI images or videos of the leaders. */
-const SCENES = ["bjp"];
+const SCENES = ["bjp", "photo"];
 
 /**
  * Post-capture AI image. Never called on live frames. The customer never types a prompt:
@@ -30,10 +30,13 @@ export const Route = createFileRoute("/api/enhance")({
         }
         const { loadConfig, presetPrompt, bjpReady } = await import("@/lib/config.server");
         const cfg = await loadConfig();
-        if (!cfg.ai.imageEnabled || !bjpReady(cfg)) return Response.json({ code: "not_configured" }, { status: 503 });
+        if (!cfg.ai.imageEnabled || (scene === "bjp" && !bjpReady(cfg))) return Response.json({ code: "not_configured" }, { status: 503 });
         const out = new FormData();
         out.append("model", MODEL);
-        out.append("prompt", presetPrompt(cfg, "image"));
+        const prompt = scene === "photo"
+          ? "Make a subtle, faithful enhancement of this single customer photo. Improve exposure, white balance, contrast and detail. Preserve the person’s exact identity, face shape, expression, pose, skin tone, clothing and all existing objects, symbols and text. Do not add or remove people or objects. Do not add political content, logos, flags or text. Do not reshape or beautify the face. Keep the result realistic and faithful to the original."
+          : presetPrompt(cfg, "image");
+        out.append("prompt", prompt);
         out.append("image", image, "capture.jpg");
         out.append("size", "1024x1536");
         out.append("output_format", "jpeg");
