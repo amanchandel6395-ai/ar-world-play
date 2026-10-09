@@ -1,6 +1,7 @@
 import { createFileRoute, notFound } from "@tanstack/react-router";
 import { Experience } from "@/components/zuitar/Experience";
-import { SCENES, isSceneId } from "@/ar/scenes";
+import { isSceneId } from "@/ar/scenes";
+import { DICTS } from "@/lib/i18n";
 
 export const Route = createFileRoute("/experience/$scene")({
   ssr: false,
@@ -8,7 +9,7 @@ export const Route = createFileRoute("/experience/$scene")({
     if (!isSceneId(params.scene)) throw notFound();
   },
   head: ({ params }) => {
-    const s = isSceneId(params.scene) ? SCENES[params.scene] : null;
+    const s = isSceneId(params.scene) ? { title: DICTS.en[params.scene], subtitle: DICTS.en[`${params.scene}Sub`] } : null;
     const title = s ? `${s.title} · ZUITAR` : "ZUITAR";
     const desc = s ? `${s.subtitle} — live AR camera by ZUITAR.` : "ZUITAR live AR camera.";
     return {

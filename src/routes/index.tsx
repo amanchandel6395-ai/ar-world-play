@@ -1,6 +1,6 @@
 import { createFileRoute, Link } from "@tanstack/react-router";
 import { useRef, useState } from "react";
-import { SCENES, type SceneId } from "@/ar/scenes";
+import type { SceneId } from "@/ar/scenes";
 import { useDevMode } from "@/lib/kiosk";
 import { DICTS } from "@/lib/i18n";
 
