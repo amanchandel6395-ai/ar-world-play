@@ -7,6 +7,14 @@ describe("permission and asset readiness", () => {
     expect(c.ready).toEqual({ yogi: false, modi: false, bjp: false });
     expect(c.bjp).toEqual([]);
     expect(c.ai.imageReady).toBe(false); expect(c.ai.videoReady).toBe(false);
+    expect(c.demo.aiReady).toBe(false);
+  });
+  it("keeps fictional demo configuration independent of leader approvals", () => {
+    const enabled = mergeConfig({ demo: { enabled: true } });
+    expect(enabled.demo.enabled).toBe(true);
+    expect(characterReady(enabled.characters.yogi)).toBe(false);
+    expect(characterReady(enabled.characters.modi)).toBe(false);
+    expect(mergeConfig({ demo: { enabled: false } }).demo.enabled).toBe(false);
   });
   it("does not trust legacy authorization or models", () => {
     const c = mergeConfig({ characters: { yogi: { authorized: true, glb: "model.glb", poses: { selfie: "old.png" } } } });
