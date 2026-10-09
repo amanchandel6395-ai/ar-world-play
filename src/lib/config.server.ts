@@ -103,8 +103,8 @@ const BJP_VID =
   NO_SYMBOLS;
 
 /**
- * Internal preset for the BJP Look. Yogi/Modi scenes have no AI preset by design:
- * the app never generates realistic images or videos of real political leaders.
+ * Internal preset for the BJP Look. Generic customer-photo enhancement uses a separate
+ * constrained prompt in the API route. Yogi/Modi scenes have no AI preset by design.
  */
 export function presetPrompt(cfg: AppConfig, kind: "image" | "video") {
   const custom = kind === "image" ? cfg.ai.bjpImagePrompt : cfg.ai.bjpVideoPrompt;
