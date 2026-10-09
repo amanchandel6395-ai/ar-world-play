@@ -35,6 +35,10 @@ function Home() {
   const [ready, setReady] = useState<PublicConfig["ready"] | null>(null);
   const [boothOpen, setBoothOpen] = useState(false);
   const [photo, setPhoto] = useState<string | null>(null);
+  const [aiPhoto, setAiPhoto] = useState<string | null>(null);
+  const [showAi, setShowAi] = useState(false);
+  const [aiBusy, setAiBusy] = useState(false);
+  const [aiError, setAiError] = useState<string | null>(null);
   const [cameraError, setCameraError] = useState<string | null>(null);
   const [cameraReady, setCameraReady] = useState(false);
   const [facingMode, setFacingMode] = useState<"user" | "environment">("user");
@@ -43,6 +47,7 @@ function Home() {
   const canvasRef = useRef<HTMLCanvasElement | null>(null);
   const streamRef = useRef<MediaStream | null>(null);
   const isHindi = lang === "hi";
+  const displayedPhoto = showAi && aiPhoto ? aiPhoto : photo;
 
   useEffect(() => {
     fetchConfig().then((c) => setReady(c.ready)).catch(() => setReady(null));
@@ -105,6 +110,9 @@ function Home() {
     context.textBaseline = "middle";
     context.fillText("ZUITAR · PHOTO BOOTH DEMO", Math.round(canvas.width * 0.05), canvas.height - footerHeight / 2);
     setPhoto(canvas.toDataURL("image/jpeg", 0.92));
+    setAiPhoto(null);
+    setShowAi(false);
+    setAiError(null);
     setCameraReady(false);
     streamRef.current?.getTracks().forEach((track) => track.stop());
     streamRef.current = null;
@@ -129,6 +137,35 @@ function Home() {
       setCameraError(null);
     } catch {
       setCameraError(isHindi ? "यह फोटो खुल नहीं सकी। दूसरी image चुनें।" : "This photo could not be opened. Choose another image.");
+    }
+  };
+
+  const enhancePhoto = async () => {
+    if (!photo || aiBusy) return;
+    setAiBusy(true);
+    setAiError(null);
+    try {
+      const image = await (await fetch(photo)).blob();
+      const form = new FormData();
+      form.append("image", image, "customer-photo.jpg");
+      form.append("scene", "photo");
+      form.append("interaction", "selfie");
+      const response = await fetch("/api/enhance", { method: "POST", body: form });
+      const result = (await response.json().catch(() => ({}))) as { b64?: string; code?: string };
+      if (!response.ok || !result.b64) {
+        const message = result.code === "not_configured"
+          ? (isHindi ? "AI अभी booth settings में चालू नहीं है।" : "AI is not enabled in booth settings yet.")
+          : result.code === "credits"
+            ? (isHindi ? "AI credits उपलब्ध नहीं हैं।" : "AI credits are unavailable.")
+            : (isHindi ? "AI edit अभी पूरा नहीं हो सका।" : "The AI edit could not be completed.");
+        throw new Error(message);
+      }
+      setAiPhoto(`data:image/jpeg;base64,${result.b64}`);
+      setShowAi(true);
+    } catch (error) {
+      setAiError(error instanceof Error ? error.message : (isHindi ? "AI edit विफल हुआ।" : "AI edit failed."));
+    } finally {
+      setAiBusy(false);
     }
   };
 
@@ -217,14 +254,18 @@ function Home() {
             <div className="flex items-start justify-between gap-4">
               <div>
                 <h2 id="booth-title" className="text-2xl font-bold">{isHindi ? "फोटो बूथ डेमो" : "Photo booth demo"}</h2>
-                <p className="mt-1 text-sm text-muted-foreground">{isHindi ? "फोटो आपके ब्राउज़र में ही रहती है।" : "Your photo stays in your browser."}</p>
+                <p className="mt-1 text-sm text-muted-foreground">{isHindi ? "फोटो device पर रहती है; AI edit चुनने पर सेवा को भेजी जाएगी।" : "Your photo stays on this device unless you choose AI edit, which sends it to the service."}</p>
               </div>
               <button aria-label={isHindi ? "बंद करें" : "Close"} onClick={() => setBoothOpen(false)} className="zt-btn-ghost">✕</button>
             </div>
 
             <div className="mt-5 flex min-h-64 flex-1 items-center justify-center overflow-hidden rounded-2xl bg-black">
               {photo ? (
-                <img src={photo} alt={isHindi ? "आपकी ली गई फोटो" : "Your captured photo"} className="max-h-[65vh] w-full object-contain" />
+                <div className="relative flex h-full w-full items-center justify-center">
+                  <img src={displayedPhoto ?? photo} alt={isHindi ? "आपकी ली गई फोटो" : "Your captured photo"} className="max-h-[65vh] w-full object-contain" />
+                  {showAi && <span className="absolute left-3 top-3 rounded-full bg-warning px-3 py-1 text-xs font-bold text-background">{isHindi ? "AI से बना" : "AI GENERATED"}</span>}
+                  {aiBusy && <div className="absolute inset-0 flex items-center justify-center bg-black/40"><span className="rounded-xl bg-overlay px-5 py-3">{isHindi ? "AI photo बना रहा है…" : "Enhancing with AI…"}</span></div>}
+                </div>
               ) : cameraError ? (
                 <p role="alert" className="max-w-md p-6 text-center text-sm text-white">{cameraError}</p>
               ) : (
@@ -243,8 +284,10 @@ function Home() {
             <div className="mt-5 flex flex-wrap justify-center gap-3">
               {photo ? (
                 <>
-                  <button onClick={() => { setPhoto(null); setCameraError(null); }} className="zt-btn-ghost">{isHindi ? "दोबारा लें" : "Retake"}</button>
-                  <a href={photo} download="zuitar-photo-booth.jpg" className="zt-btn-primary">{isHindi ? "डाउनलोड" : "Download photo"}</a>
+                  <button onClick={() => { setPhoto(null); setAiPhoto(null); setShowAi(false); setAiError(null); setCameraError(null); }} className="zt-btn-ghost">{isHindi ? "दोबारा लें" : "Retake"}</button>
+                  <a href={displayedPhoto ?? photo} download={showAi ? "zuitar-ai-photo.jpg" : "zuitar-photo-booth.jpg"} className="zt-btn-primary">{isHindi ? "डाउनलोड" : "Download photo"}</a>
+                  {!aiPhoto && <button onClick={() => void enhancePhoto()} disabled={aiBusy} className="zt-btn-secondary disabled:opacity-50">{isHindi ? "✦ AI से सुधारें" : "✦ Enhance with AI"}</button>}
+                  {aiPhoto && <button onClick={() => setShowAi((value) => !value)} className="zt-btn-secondary">{showAi ? (isHindi ? "Original दिखाएँ" : "Show original") : (isHindi ? "AI photo दिखाएँ" : "Show AI photo")}</button>}
                 </>
               ) : (
                 <>
@@ -271,6 +314,8 @@ function Home() {
                 </>
               )}
             </div>
+            {photo && <p className="mt-3 text-center text-xs text-muted-foreground">{isHindi ? "AI edit चुनने पर फोटो AI सेवा को भेजी जाएगी और परिणाम AI-generated चिह्नित होगा।" : "Choosing AI edit sends the photo to the AI service; its result is labelled AI-generated."}</p>}
+            {aiError && <p role="alert" className="mt-2 text-center text-sm text-destructive">{aiError}</p>}
           </section>
         </div>
       )}
