@@ -229,8 +229,8 @@ function Home() {
             <h2 className="text-xl font-bold md:text-2xl">{isHindi ? "अपना फोटो बूथ डेमो" : "Try the photo booth demo"}</h2>
             <p className="mt-1 max-w-2xl text-sm text-muted-foreground md:text-base">
               {isHindi
-                ? "फोन या लैपटॉप से फोटो लें या चुनें। AI से हल्का सुधारें या काल्पनिक रोबोट साथी वाला डेमो आज़माएँ, फिर डाउनलोड करें।"
-                : "Take or choose a photo on your phone or laptop. Try a faithful AI enhancement or add a fictional robot companion, then download it."}
+                ? "फोन या लैपटॉप से फोटो लें या चुनें। AI से फोटो बेहतर करें, फिर देखें और डाउनलोड करें।"
+                : "Take or choose a photo on your phone or laptop. Enhance your photo with AI, then preview and download it."}
             </p>
           </div>
           <button onClick={() => { setPhoto(null); setBoothOpen(true); }} className="zt-btn-primary shrink-0">
@@ -241,7 +241,7 @@ function Home() {
 
       {dev && (
         <nav className="mx-auto mt-6 flex gap-3 font-mono text-xs text-muted-foreground">
-          <Link to="/selfie" className="underline">engine test: selfie</Link>
+          <span className="rounded border px-2 py-1">TEST MODE</span><Link to="/selfie" className="underline">engine test: selfie</Link>
           <Link to="/world" className="underline">engine test: world</Link>
         </nav>
       )}
@@ -288,7 +288,7 @@ function Home() {
                   <button onClick={() => { setPhoto(null); setAiPhoto(null); setShowAi(false); setAiError(null); setCameraError(null); }} className="zt-btn-ghost">{isHindi ? "दोबारा लें" : "Retake"}</button>
                   <a href={displayedPhoto ?? photo} download={showAi ? "zuitar-ai-photo.jpg" : "zuitar-photo-booth.jpg"} className="zt-btn-primary">{isHindi ? "डाउनलोड" : "Download photo"}</a>
                   <button onClick={() => void enhancePhoto("photo")} disabled={aiBusy} className="zt-btn-secondary disabled:opacity-50">{isHindi ? "✦ AI से सुधारें" : "✦ Enhance with AI"}</button>
-                  {demoAiReady && <button onClick={() => void enhancePhoto("demo")} disabled={aiBusy} className="zt-btn-secondary disabled:opacity-50">{isHindi ? "✦ काल्पनिक साथी डेमो" : "✦ Fictional companion demo"}</button>}
+                  {dev && demoAiReady && <button onClick={() => void enhancePhoto("demo")} disabled={aiBusy} className="zt-btn-secondary disabled:opacity-50">{isHindi ? "✦ TEST: काल्पनिक AI सेल्फी" : "✦ TEST: Fictional AI selfie"}</button>}
                   {aiPhoto && <button onClick={() => setShowAi((value) => !value)} className="zt-btn-secondary">{showAi ? (isHindi ? "Original दिखाएँ" : "Show original") : (isHindi ? "AI photo दिखाएँ" : "Show AI photo")}</button>}
                 </>
               ) : (
