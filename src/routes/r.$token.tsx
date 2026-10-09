@@ -13,6 +13,8 @@ export const Route = createFileRoute("/r/$token")({
       { property: "og:title", content: "Your ZUITAR photo" },
       { property: "og:description", content: "View and download your ZUITAR photo." },
       { name: "robots", content: "noindex" },
+      { property: "og:type", content: "website" },
+      { name: "twitter:card", content: "summary" },
     ],
   }),
   component: SharePage,

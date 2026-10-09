@@ -3,7 +3,8 @@ import { INTERACTIONS } from "@/lib/config";
 
 const GATEWAY = "https://ai.gateway.lovable.dev";
 const MODEL = "google/gemini-omni-1.1-flash";
-const SCENES = ["yogi", "modi", "bjp"];
+/** AI runs only for the BJP Look. Yogi/Modi scenes never get AI images or videos of the leaders. */
+const SCENES = ["bjp"];
 const ID_RE = /^[A-Za-z0-9_-]{6,128}$/;
 
 async function b64(blob: Blob) {
@@ -36,17 +37,19 @@ export const Route = createFileRoute("/api/video")({
           !SCENES.includes(scene) ||
           !(INTERACTIONS as readonly string[]).includes(interaction)
         ) {
-          return Response.json({ code: "invalid" }, { status: 400 });
+          return Response.json({ code: scene === "yogi" || scene === "modi" ? "not_allowed" : "invalid" }, { status: 400 });
         }
-        const { loadConfig, presetPrompt, referenceFor } = await import("@/lib/config.server");
+        const { loadConfig, saveConfig, checkAdmin, presetPrompt, bjpReady } = await import("@/lib/config.server");
         const cfg = await loadConfig();
-        if (!cfg.ai.videoEnabled) return Response.json({ code: "not_configured" }, { status: 503 });
-        const ref = await referenceFor(cfg, scene);
+        if (!cfg.ai.videoEnabled || !bjpReady(cfg)) return Response.json({ code: "not_configured" }, { status: 503 });
+        if (!cfg.ai.videoVerifiedAt) {
+          try { checkAdmin(request.headers.get("X-Booth-Admin") ?? ""); }
+          catch { return Response.json({ code: "not_configured" }, { status: 503 }); }
+        }
         const input: unknown[] = [
-          { type: "text", text: presetPrompt(cfg, scene, interaction, "video", !!ref) },
+          { type: "text", text: presetPrompt(cfg, "video") },
           { type: "image", data: await b64(image), mime_type: image.type || "image/jpeg" },
         ];
-        if (ref) input.push({ type: "image", data: await b64(ref), mime_type: ref.type || "image/png" });
         const dur = Math.min(10, Math.max(3, Math.round(cfg.ai.videoDuration || 6)));
         const res = await fetch(`${GATEWAY}/v1/videos`, {
           method: "POST",
@@ -63,6 +66,9 @@ export const Route = createFileRoute("/api/video")({
         }
         const job = (await res.json()) as { id?: string };
         if (!job.id) return Response.json({ code: "failed" }, { status: 502 });
+        const latest = await loadConfig();
+        latest.ai.videoJobs = [...latest.ai.videoJobs.slice(-99), job.id];
+        await saveConfig(latest);
         return Response.json({ id: job.id });
       },
       GET: async ({ request }) => {
@@ -70,7 +76,13 @@ export const Route = createFileRoute("/api/video")({
         if (!key) return Response.json({ code: "not_configured" }, { status: 503 });
         const id = new URL(request.url).searchParams.get("id") ?? "";
         if (!ID_RE.test(id)) return Response.json({ code: "invalid" }, { status: 400 });
-        const { admin } = await import("@/lib/config.server");
+        const { admin, loadConfig, checkAdmin, bjpReady } = await import("@/lib/config.server");
+        const cfg = await loadConfig();
+        if (!cfg.ai.videoEnabled || !bjpReady(cfg) || !cfg.ai.videoJobs.includes(id)) return Response.json({ code: "not_configured" }, { status: 503 });
+        if (!cfg.ai.videoVerifiedAt) {
+          try { checkAdmin(request.headers.get("X-Booth-Admin") ?? ""); }
+          catch { return Response.json({ code: "not_configured" }, { status: 503 }); }
+        }
         const sb = await admin();
         const path = `videos/${id}.mp4`;
         const signed = () => sb.storage.from("captures").createSignedUrl(path, 3600);

@@ -66,9 +66,12 @@ export function Experience({ sceneId }: { sceneId: SceneId }) {
     setStatus(null);
     setTorch(false);
     setTorchOk(false);
+    const video = videoRef.current;
+    const canvas = canvasRef.current;
+    if (!video || !canvas) return;
     startFrontEngine({
-      video: videoRef.current!,
-      canvas: canvasRef.current!,
+      video,
+      canvas,
       scene,
       facing,
       ctx: { config, interaction: interactionRef.current },
@@ -104,7 +107,7 @@ export function Experience({ sceneId }: { sceneId: SceneId }) {
   };
 
   const capture = () => {
-    if (count > 0 || !engine.current) return;
+    if (count > 0 || !engine.current || engine.current.standIn || !config?.ready[sceneId]) return;
     let n = scene.capture.countdown;
     setCount(n);
     const tick = () => {
@@ -114,6 +117,7 @@ export function Experience({ sceneId }: { sceneId: SceneId }) {
         window.setTimeout(tick, 1000);
       } else {
         setCount(0);
+        if (!engine.current || engine.current.standIn) return;
         engine.current
           ?.capture()
           .then((b) => {
@@ -155,8 +159,9 @@ export function Experience({ sceneId }: { sceneId: SceneId }) {
         photo={photo}
         sceneId={sceneId}
         interaction={interaction}
-        allowAi={config?.ai.imageEnabled ?? true}
-        allowVideo={config?.ai.videoEnabled ?? true}
+        allowAi={sceneId === "bjp" && !!config?.ai.imageReady}
+        allowVideo={sceneId === "bjp" && !!config?.ai.videoReady}
+        videoConfigured={sceneId === "bjp" && !!config?.ai.videoEnabled}
         onRetake={() => {
           setPhoto(null);
           setPhase("live");
@@ -169,6 +174,8 @@ export function Experience({ sceneId }: { sceneId: SceneId }) {
   const title = t[sceneId];
   const subtitle = t[`${sceneId}Sub`];
   const ready = status?.engine && !error;
+  const sceneReady = !!config?.ready[sceneId];
+  const assetMissing = !sceneReady || (!!ready && !!engine.current?.standIn);
   const interactions = config?.interactions.filter((i) => i.enabled) ?? [];
   const on = (b?: boolean) => (b ? "on" : "off") as "on" | "off";
   const rows: DebugRow[] = status
@@ -195,7 +202,7 @@ export function Experience({ sceneId }: { sceneId: SceneId }) {
     <div className="relative h-dvh w-full overflow-hidden bg-background">
       <video ref={videoRef} className="hidden" playsInline muted />
       {phase === "live" && (
-        <canvas ref={canvasRef} className={`h-full w-full object-cover ${facing === "user" ? "mirror-x" : ""}`} />
+        <canvas ref={canvasRef} className="h-full w-full object-cover" />
       )}
 
       {phase === "intro" && (
@@ -225,10 +232,15 @@ export function Experience({ sceneId }: { sceneId: SceneId }) {
             <p className="max-w-md text-warning">{t.noCamera}</p>
           ) : configError ? (
             <div className="flex flex-col items-center gap-3">
-              <p className="max-w-md text-warning">{t.errEngine}</p>
+              <p className="max-w-md text-warning">{t.setupTitle}</p>
               <button onClick={loadConfig} className="zt-btn-primary min-w-64 text-xl">
                 {t.retry}
               </button>
+            </div>
+          ) : config && !sceneReady ? (
+            <div role="status" className="flex max-w-md flex-col items-center gap-2 rounded-2xl border border-warning/60 bg-card px-6 py-5">
+              <p className="text-xl font-bold text-warning">{t.setupTitle}</p>
+              <p className="text-muted-foreground">{sceneId === "bjp" ? t.setupBjp : t.setupChar}</p>
             </div>
           ) : (
             <button onClick={() => setPhase("live")} disabled={!config} className="zt-btn-primary min-w-64 text-xl disabled:opacity-50">
@@ -273,11 +285,15 @@ export function Experience({ sceneId }: { sceneId: SceneId }) {
             <button onClick={goHome} aria-label={t.back} className="zt-btn-round">
               ←
             </button>
-            {ready && engine.current?.standIn && (
-              <div className="pointer-events-none mt-2 max-w-[50%] rounded-full bg-overlay px-3 py-1 text-center text-[10px] text-muted-foreground md:text-xs">
-                {sceneId === "bjp" ? t.standInLook : t.standIn}
+            {ready && assetMissing ? (
+              <div role="status" className="pointer-events-none mt-1 max-w-[55%] rounded-2xl border border-warning/60 bg-overlay px-3 py-1.5 text-center text-xs font-semibold text-warning md:text-sm">
+                {t.setupTitle}
               </div>
-            )}
+            ) : ready && sceneId !== "bjp" ? (
+              <div className="pointer-events-none mt-2 max-w-[50%] rounded-full bg-overlay px-3 py-1 text-center text-[10px] text-muted-foreground md:text-xs">
+                {t.photoNote}
+              </div>
+            ) : null}
             <div className="flex flex-wrap justify-end gap-2">
               <button onClick={() => setLang(lang === "en" ? "hi" : "en")} className="zt-btn-round text-xs">
                 {lang === "en" ? "हिं" : "EN"}
@@ -341,13 +357,13 @@ export function Experience({ sceneId }: { sceneId: SceneId }) {
               <div className="flex justify-center">
                 <button
                   onClick={capture}
-                  disabled={!ready || count > 0}
+                  disabled={!ready || count > 0 || assetMissing}
                   aria-label={t.capture}
                   className="h-24 w-24 rounded-full border-[6px] border-foreground bg-primary shadow-2xl transition-transform active:scale-90 disabled:opacity-40 md:h-28 md:w-28"
                 />
               </div>
               <div className="flex justify-end gap-3">
-                {scene.camera.worldAR && caps?.worldAR && facing === "environment" && (
+                {scene.camera.worldAR && sceneReady && caps?.worldAR && facing === "environment" && (
                   <button onClick={() => setPhase("world")} className="zt-btn-round text-xs">
                     {t.room}
                   </button>

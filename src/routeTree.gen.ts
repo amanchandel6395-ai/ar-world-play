@@ -10,6 +10,7 @@
 
 import { Route as rootRouteImport } from './routes/__root'
 import { Route as IndexRouteImport } from './routes/index'
+import { Route as AdminRouteImport } from './routes/admin'
 import { Route as SelfieRouteImport } from './routes/selfie'
 import { Route as WorldRouteImport } from './routes/world'
 import { Route as ApiEnhanceRouteImport } from './routes/api/enhance'
@@ -20,6 +21,11 @@ import { Route as RTokenRouteImport } from './routes/r.$token'
 const IndexRoute = IndexRouteImport.update({
   id: '/',
   path: '/',
+  getParentRoute: () => rootRouteImport,
+} as any)
+const AdminRoute = AdminRouteImport.update({
+  id: '/admin',
+  path: '/admin',
   getParentRoute: () => rootRouteImport,
 } as any)
 const SelfieRoute = SelfieRouteImport.update({
@@ -55,6 +61,7 @@ const RTokenRoute = RTokenRouteImport.update({
 
 export interface FileRoutesByFullPath {
   '/': typeof IndexRoute
+  '/admin': typeof AdminRoute
   '/selfie': typeof SelfieRoute
   '/world': typeof WorldRoute
   '/api/enhance': typeof ApiEnhanceRoute
@@ -64,6 +71,7 @@ export interface FileRoutesByFullPath {
 }
 export interface FileRoutesByTo {
   '/': typeof IndexRoute
+  '/admin': typeof AdminRoute
   '/selfie': typeof SelfieRoute
   '/world': typeof WorldRoute
   '/api/enhance': typeof ApiEnhanceRoute
@@ -74,6 +82,7 @@ export interface FileRoutesByTo {
 export interface FileRoutesById {
   __root__: typeof rootRouteImport
   '/': typeof IndexRoute
+  '/admin': typeof AdminRoute
   '/selfie': typeof SelfieRoute
   '/world': typeof WorldRoute
   '/api/enhance': typeof ApiEnhanceRoute
@@ -85,6 +94,7 @@ export interface FileRouteTypes {
   fileRoutesByFullPath: FileRoutesByFullPath
   fullPaths:
     | '/'
+    | '/admin'
     | '/selfie'
     | '/world'
     | '/api/enhance'
@@ -94,6 +104,7 @@ export interface FileRouteTypes {
   fileRoutesByTo: FileRoutesByTo
   to:
     | '/'
+    | '/admin'
     | '/selfie'
     | '/world'
     | '/api/enhance'
@@ -103,6 +114,7 @@ export interface FileRouteTypes {
   id:
     | '__root__'
     | '/'
+    | '/admin'
     | '/selfie'
     | '/world'
     | '/api/enhance'
@@ -113,6 +125,7 @@ export interface FileRouteTypes {
 }
 export interface RootRouteChildren {
   IndexRoute: typeof IndexRoute
+  AdminRoute: typeof AdminRoute
   SelfieRoute: typeof SelfieRoute
   WorldRoute: typeof WorldRoute
   ApiEnhanceRoute: typeof ApiEnhanceRoute
@@ -128,6 +141,13 @@ declare module '@tanstack/react-router' {
       path: '/'
       fullPath: '/'
       preLoaderRoute: typeof IndexRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/admin': {
+      id: '/admin'
+      path: '/admin'
+      fullPath: '/admin'
+      preLoaderRoute: typeof AdminRouteImport
       parentRoute: typeof rootRouteImport
     }
     '/selfie': {
@@ -177,6 +197,7 @@ declare module '@tanstack/react-router' {
 
 const rootRouteChildren: RootRouteChildren = {
   IndexRoute: IndexRoute,
+  AdminRoute: AdminRoute,
   SelfieRoute: SelfieRoute,
   WorldRoute: WorldRoute,
   ApiEnhanceRoute: ApiEnhanceRoute,

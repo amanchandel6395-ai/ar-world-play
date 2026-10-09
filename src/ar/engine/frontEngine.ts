@@ -257,7 +257,7 @@ export async function startFrontEngine(opts: {
     distanceCm: null,
     dt: 0,
     view,
-    mirrored: facing === "user",
+    mirrored: false,
     unproject,
     project,
   };
@@ -390,7 +390,8 @@ export async function startFrontEngine(opts: {
       }
     },
     capture() {
-      // Capture exactly what the user sees: the visible (cropped) part, mirrored like the preview.
+      // Capture the same unmirrored, cropped canvas shown in the preview.
+      if (runtime.standIn) return Promise.reject(new Error("Setup incomplete"));
       updateView();
       const sx = view.uMin * canvas.width;
       const sy = view.vMin * canvas.height;
@@ -399,11 +400,8 @@ export async function startFrontEngine(opts: {
       const out = document.createElement("canvas");
       out.width = Math.round(sw);
       out.height = Math.round(sh);
-      const g = out.getContext("2d")!;
-      if (facing === "user") {
-        g.translate(out.width, 0);
-        g.scale(-1, 1);
-      }
+      const g = out.getContext("2d");
+      if (!g) return Promise.reject(new Error("Capture unavailable"));
       g.drawImage(canvas, sx, sy, sw, sh, 0, 0, out.width, out.height);
       return new Promise((resolve, reject) =>
         out.toBlob((b) => (b ? resolve(b) : reject(new Error("capture failed"))), "image/jpeg", 0.92),

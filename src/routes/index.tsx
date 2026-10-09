@@ -1,8 +1,11 @@
 import { createFileRoute, Link } from "@tanstack/react-router";
-import { useRef, useState } from "react";
+import { useEffect, useRef, useState } from "react";
+import { useServerFn } from "@tanstack/react-start";
+import { getPublicConfig } from "@/lib/config.functions";
+import type { PublicConfig } from "@/lib/config";
 import type { SceneId } from "@/ar/scenes";
 import { useDevMode } from "@/lib/kiosk";
-import { DICTS } from "@/lib/i18n";
+import { LangToggleLabel, useLang } from "@/lib/i18n";
 
 export const Route = createFileRoute("/")({
   head: () => ({
@@ -11,26 +14,28 @@ export const Route = createFileRoute("/")({
       { name: "description", content: "Choose your experience: live AR selfies and styling with ZUITAR." },
       { property: "og:title", content: "ZUITAR · AI Camera + AR" },
       { property: "og:description", content: "Live AR selfies and styling, right in your browser." },
+      { property: "og:type", content: "website" },
+      { name: "twitter:card", content: "summary_large_image" },
     ],
   }),
   component: Home,
 });
 
-const cards: { id: SceneId; kicker: string; tone: string }[] = [
-  { id: "yogi", kicker: "Selfie with", tone: "from-saffron/40" },
-  { id: "modi", kicker: "Selfie with", tone: "from-gold/35" },
-  { id: "bjp", kicker: "Style", tone: "from-leaf/40" },
+const cards: { id: SceneId; kicker: "selfieWith" | "style"; tone: string }[] = [
+  { id: "yogi", kicker: "selfieWith", tone: "from-saffron/40" },
+  { id: "modi", kicker: "selfieWith", tone: "from-gold/35" },
+  { id: "bjp", kicker: "style", tone: "from-leaf/40" },
 ];
-
-const names: Record<SceneId, [string, string]> = {
-  yogi: ["CM Yogi", "Adityanath"],
-  modi: ["PM Narendra", "Modi"],
-  bjp: ["BJP", "Look"],
-};
 
 function Home() {
   const [dev, setDev] = useDevMode();
   const [flash, setFlash] = useState<string | null>(null);
+  const [lang, setLang, t] = useLang();
+  const fetchConfig = useServerFn(getPublicConfig);
+  const [ready, setReady] = useState<PublicConfig["ready"] | null>(null);
+  useEffect(() => {
+    fetchConfig().then((c) => setReady(c.ready)).catch(() => setReady(null));
+  }, [fetchConfig]);
   const press = useRef<number | null>(null);
   const startPress = () => {
     press.current = window.setTimeout(() => {
@@ -52,7 +57,10 @@ function Home() {
         >
           ZUITAR
         </h1>
-        <p className="mt-3 text-lg text-muted-foreground md:text-2xl">Choose Your Experience</p>
+        <p className="mt-3 text-lg text-muted-foreground md:text-2xl">{t.choose}</p>
+        <button onClick={() => setLang(lang === "en" ? "hi" : "en")} className="zt-btn-ghost mt-3 border border-border">
+          {LangToggleLabel(lang)}
+        </button>
       </header>
 
       <div className="mx-auto mt-8 grid w-full max-w-7xl flex-1 gap-4 md:mt-12 md:grid-cols-3 md:gap-6">
@@ -65,16 +73,18 @@ function Home() {
             style={{ animationDelay: `${i * 90}ms` }}
           >
             <span className="absolute right-6 top-6 text-6xl font-bold text-foreground/10 md:text-8xl">0{i + 1}</span>
-            <p className="text-sm font-semibold uppercase tracking-[0.25em] text-primary">{c.kicker}</p>
-            <h2 className="mt-2 text-3xl font-bold leading-tight md:text-4xl">
-              {names[c.id][0]}
-              <br />
-              {names[c.id][1]}
-            </h2>
-            <p className="mt-2 text-muted-foreground">{DICTS.en[`${c.id}Sub`]}</p>
-            <span className="mt-5 inline-flex w-fit items-center rounded-full bg-primary px-6 py-3 text-lg font-semibold text-primary-foreground">
-              Start →
-            </span>
+            <p className="text-sm font-semibold uppercase tracking-[0.25em] text-primary">{t[c.kicker]}</p>
+            <h2 className="mt-2 text-3xl font-bold leading-tight md:text-4xl">{t[c.id]}</h2>
+            <p className="mt-2 text-muted-foreground">{t[`${c.id}Sub`]}</p>
+            {!ready?.[c.id] ? (
+              <span className="mt-5 inline-flex w-fit items-center rounded-full border border-warning/60 px-5 py-2.5 text-base font-semibold text-warning">
+                {t.setupBadge}
+              </span>
+            ) : (
+              <span className="mt-5 inline-flex w-fit items-center rounded-full bg-primary px-6 py-3 text-lg font-semibold text-primary-foreground">
+                {t.start} →
+              </span>
+            )}
           </Link>
         ))}
       </div>

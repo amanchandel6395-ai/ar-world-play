@@ -1,4 +1,4 @@
-import { mergeConfig, type AppConfig, type CharacterId, type InteractionId, type PublicConfig } from "./config";
+import { bjpUsable, characterReady, mergeConfig, type AppConfig, type CharacterId, type InteractionId, type PublicConfig } from "./config";
 
 /** Server-only helpers. Never import from client code. */
 export async function admin() {
@@ -46,47 +46,67 @@ export async function toPublic(cfg: AppConfig): Promise<PublicConfig> {
   const hasKey = !!process.env["LOVABLE_API_KEY"];
   const pubChar = async (id: CharacterId) => {
     const { reference, ...c } = cfg.characters[id];
+    const ok = characterReady(cfg.characters[id]);
+    // Unauthorized likeness assets are never signed or sent to customers.
     const poses: Partial<Record<InteractionId, string>> = {};
-    for (const [k, v] of Object.entries(c.poses)) {
-      const u = await signPath(v ?? null);
-      if (u) poses[k as InteractionId] = u;
+    if (ok) {
+      for (const [k, v] of Object.entries(c.poses)) {
+        if (!v || !c.approvedAssets[v]) continue;
+        const u = await signPath(v);
+        if (u) poses[k as InteractionId] = u;
+      }
     }
-    return { ...c, thumbnail: await signPath(c.thumbnail), glb: await signPath(c.glb), poses, hasReference: !!reference };
+    return {
+      ...c,
+      permissionNote: "",
+      approvedAssets: {},
+      animations: {},
+      thumbnail: ok && c.thumbnail && c.approvedAssets[c.thumbnail] ? await signPath(c.thumbnail) : null,
+      glb: null,
+      poses,
+      hasReference: !!reference,
+    };
   };
-  const bjp = await Promise.all(
-    cfg.bjp.filter((b) => b.enabled).map(async (b) => ({ ...b, asset: await signPath(b.asset) })),
-  );
+  const bjp = await Promise.all(cfg.bjp.filter(bjpUsable).map(async (b) => ({ ...b, permissionNote: "", asset: await signPath(b.asset) })));
+  const usableBjp = bjp.filter((b) => b.asset);
+  const characters = { yogi: await pubChar("yogi"), modi: await pubChar("modi") };
+  const bjpReady = usableBjp.length > 0;
   return {
-    characters: { yogi: await pubChar("yogi"), modi: await pubChar("modi") },
-    bjp: bjp.filter((b) => b.asset || b.id.startsWith("builtin")),
+    characters,
+    bjp: usableBjp,
     interactions: cfg.interactions.map(({ imagePrompt: _a, videoPrompt: _b, action: _c, ...r }) => r),
-    ai: { imageEnabled: cfg.ai.imageEnabled, videoEnabled: cfg.ai.videoEnabled, imageReady: hasKey && cfg.ai.imageEnabled, videoReady: hasKey && cfg.ai.videoEnabled },
+    ai: {
+      imageEnabled: cfg.ai.imageEnabled,
+      videoEnabled: cfg.ai.videoEnabled,
+      imageReady: hasKey && cfg.ai.imageEnabled && bjpReady,
+      videoReady: hasKey && cfg.ai.videoEnabled && bjpReady && !!cfg.ai.videoVerifiedAt,
+    },
+    ready: {
+      yogi: characterReady(cfg.characters.yogi) && Object.keys(characters.yogi.poses).length > 0,
+      modi: characterReady(cfg.characters.modi) && Object.keys(characters.modi.poses).length > 0,
+      bjp: bjpReady,
+    },
     brand: cfg.brand,
   };
 }
 
-const IMG_DEFAULT = (action: string, hasRef: boolean) =>
-  `Create a photorealistic vertical 9:16 photo of the customer from the first image ${action}${hasRef ? " together with the person shown in the second (authorized reference) image" : ""}. Keep the customer's face, skin tone, hair and clothing exactly recognizable. Natural lighting, sharp focus, respectful and dignified.`;
-const VID_DEFAULT = (action: string, hasRef: boolean) =>
-  `A short photorealistic vertical video: the customer from the photo <FIRST_FRAME> ${action}${hasRef ? " with the person from the reference image <IMAGE_REF_0>" : ""}, in a single continuous shot, gentle camera movement, warm natural light, soft ambient crowd sound. No dialogue. Keep faces exactly recognizable.`;
+/** True when the BJP Look has at least one uploaded, approved, enabled artwork item. */
+export const bjpReady = (cfg: AppConfig) => cfg.bjp.some(bjpUsable);
+
+const NO_SYMBOLS =
+  " Do not add, draw, alter or invent any logo, party symbol, flag, text or person. Do not add any other people. Keep every existing item exactly as it appears.";
 const BJP_IMG =
-  "Enhance this vertical 9:16 photo with festive saffron and green stage lighting and a soft bokeh background. Keep the person, face, pose, cap and scarf exactly as they are.";
+  "Enhance this vertical 9:16 photo with warm saffron and green stage lighting and a soft, plain bokeh background. Keep the person, face, pose and the cap/scarf/artwork they wear exactly as they are." +
+  NO_SYMBOLS;
 const BJP_VID =
-  "The person in the photo <FIRST_FRAME> smiles and waves at a festive saffron and green rally, single continuous shot, gentle push-in, cheerful crowd ambience. No dialogue. Keep the face exactly recognizable.";
+  "The person in the photo <FIRST_FRAME> smiles and waves, single continuous shot, gentle push-in, warm saffron and green lighting, soft plain background. No dialogue. Keep the face and everything they wear exactly as in the photo." +
+  NO_SYMBOLS;
 
-/** Resolves the internal preset instruction for a scene + interaction. Customer never sees or types it. */
-export function presetPrompt(cfg: AppConfig, scene: string, interaction: string, kind: "image" | "video", hasRef: boolean) {
-  if (scene === "bjp") return kind === "image" ? cfg.ai.bjpImagePrompt || BJP_IMG : cfg.ai.bjpVideoPrompt || BJP_VID;
-  const ix = cfg.interactions.find((i) => i.id === interaction) ?? cfg.interactions[0]!;
-  const custom = kind === "image" ? ix.imagePrompt : ix.videoPrompt;
-  if (custom) return custom;
-  return kind === "image" ? IMG_DEFAULT(ix.action, hasRef) : VID_DEFAULT(ix.action, hasRef);
-}
-
-/** Authorized reference image for a character scene, or null when not authorized / not uploaded. */
-export async function referenceFor(cfg: AppConfig, scene: string): Promise<Blob | null> {
-  if (scene !== "yogi" && scene !== "modi") return null;
-  const c = cfg.characters[scene];
-  if (!c.authorized || !c.reference) return null;
-  return downloadAsset(c.reference);
+/**
+ * Internal preset for the BJP Look. Yogi/Modi scenes have no AI preset by design:
+ * the app never generates realistic images or videos of real political leaders.
+ */
+export function presetPrompt(cfg: AppConfig, kind: "image" | "video") {
+  const custom = kind === "image" ? cfg.ai.bjpImagePrompt : cfg.ai.bjpVideoPrompt;
+  return (custom ? custom + NO_SYMBOLS : kind === "image" ? BJP_IMG : BJP_VID);
 }

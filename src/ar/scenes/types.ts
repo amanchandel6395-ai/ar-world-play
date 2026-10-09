@@ -40,7 +40,7 @@ export type SceneRuntime = {
   setInteraction?(id: InteractionId): void;
   reset?(): void;
   dispose?(): void;
-  /** true when the scene currently shows a development stand-in instead of an authorized asset */
+  /** true when no authorized/approved asset is available (nothing is rendered; UI shows setup message) */
   standIn?: boolean;
 };
 

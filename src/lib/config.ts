@@ -7,8 +7,13 @@ export type Bilingual = { en: string; hi: string };
 
 export type Character = {
   enabled: boolean;
-  /** Admin confirms they hold written authorization for this likeness. Without it, only the stand-in is shown. */
+  /** Admin confirms they hold written authorization for this likeness. Without it the scene stays disabled. */
   authorized: boolean;
+  /** ISO timestamp when the admin recorded the authorization (audit trail). */
+  authorizedAt: string | null;
+  permissionNote: string;
+  /** Exact uploaded cutout paths explicitly approved by staff; legacy approvals are not trusted. */
+  approvedAssets: Record<string, string>;
   name: Bilingual;
   /** storage paths inside the private `assets` bucket (public config carries signed URLs instead) */
   reference: string | null;
@@ -28,9 +33,12 @@ export type BjpItem = {
   id: string;
   kind: BjpKind;
   label: string;
-  /** storage path; null = built-in 3D stand-in (cap/scarf only) */
+  /** storage path of the exact uploaded artwork */
   asset: string | null;
   approved: boolean;
+  /** ISO timestamp when the admin approved this artwork. */
+  approvedAt: string | null;
+  permissionNote: string;
   enabled: boolean;
   anchor: BjpAnchor;
   /** width in cm (head/shoulders: relative to shoulder width x100) or % of screen width (screen) */
@@ -57,7 +65,17 @@ export type AppConfig = {
   characters: Record<CharacterId, Character>;
   bjp: BjpItem[];
   interactions: Interaction[];
-  ai: { imageEnabled: boolean; videoEnabled: boolean; videoDuration: number; bjpImagePrompt: string; bjpVideoPrompt: string };
+  ai: {
+    /** BJP Look post-capture styling only. AI is never used for Yogi/Modi scenes. */
+    imageEnabled: boolean;
+    videoEnabled: boolean;
+    /** ISO timestamp of the last successful end-to-end video test run from the admin page. */
+    videoVerifiedAt: string | null;
+    videoJobs: string[];
+    videoDuration: number;
+    bjpImagePrompt: string;
+    bjpVideoPrompt: string;
+  };
   brand: { title: string; tagline: Bilingual; idleTimeoutSec: number; resultTimeoutSec: number };
 };
 
@@ -67,12 +85,17 @@ export type PublicConfig = {
   bjp: BjpItem[];
   interactions: Omit<Interaction, "imagePrompt" | "videoPrompt" | "action">[];
   ai: { imageEnabled: boolean; videoEnabled: boolean; imageReady: boolean; videoReady: boolean };
+  /** Per-scene readiness: true only when an authorized/approved asset is configured. */
+  ready: Record<CharacterId | "bjp", boolean>;
   brand: AppConfig["brand"];
 };
 
 const char = (en: string, hi: string): Character => ({
   enabled: true,
   authorized: false,
+  authorizedAt: null,
+  permissionNote: "",
+  approvedAssets: {},
   name: { en, hi },
   reference: null,
   thumbnail: null,
@@ -97,10 +120,7 @@ const ix = (id: InteractionId, icon: string, en: string, hi: string, action: str
 
 export const DEFAULT_CONFIG: AppConfig = {
   characters: { yogi: char("CM Yogi Adityanath", "मुख्यमंत्री योगी आदित्यनाथ"), modi: char("PM Narendra Modi", "प्रधानमंत्री नरेंद्र मोदी") },
-  bjp: [
-    { id: "builtin-cap", kind: "cap", label: "Stand-in cap", asset: null, approved: true, enabled: true, anchor: "head", scale: 1, offsetX: 0, offsetY: 0, rotation: 0, order: 1 },
-    { id: "builtin-scarf", kind: "scarf", label: "Stand-in scarf", asset: null, approved: true, enabled: true, anchor: "shoulders", scale: 1, offsetX: 0, offsetY: 0, rotation: 0, order: 2 },
-  ],
+  bjp: [],
   interactions: [
     ix("selfie", "🤳", "Selfie", "सेल्फ़ी", "standing side by side taking a selfie"),
     ix("namaste", "🙏", "Namaste", "नमस्ते", "greeting each other with folded hands in namaste"),
@@ -111,8 +131,10 @@ export const DEFAULT_CONFIG: AppConfig = {
     ix("event", "🎉", "Event", "कार्यक्रम", "on stage at a public event with a festive crowd behind"),
   ],
   ai: {
-    imageEnabled: true,
-    videoEnabled: true,
+    imageEnabled: false,
+    videoEnabled: false,
+    videoVerifiedAt: null,
+    videoJobs: [],
     videoDuration: 6,
     bjpImagePrompt: "",
     bjpVideoPrompt: "",
@@ -131,10 +153,13 @@ export function mergeConfig(stored: unknown): AppConfig {
   const d = DEFAULT_CONFIG;
   return {
     characters: {
-      yogi: { ...d.characters.yogi, ...(s.characters?.yogi ?? {}) },
-      modi: { ...d.characters.modi, ...(s.characters?.modi ?? {}) },
+      yogi: { ...d.characters.yogi, ...(s.characters?.yogi ?? {}), approvedAssets: s.characters?.yogi?.approvedAssets ?? {} },
+      modi: { ...d.characters.modi, ...(s.characters?.modi ?? {}), approvedAssets: s.characters?.modi?.approvedAssets ?? {} },
     },
-    bjp: Array.isArray(s.bjp) ? s.bjp : d.bjp,
+    // Built-in stand-in items are retired; only uploaded artwork can be used.
+    bjp: (Array.isArray(s.bjp) ? s.bjp : d.bjp)
+      .filter((b) => b && !String(b.id).startsWith("builtin"))
+      .map((b) => ({ ...b, approvedAt: b.approvedAt ?? null, permissionNote: b.permissionNote ?? "" })),
     interactions: d.interactions.map((di) => ({ ...di, ...(s.interactions?.find((x) => x.id === di.id) ?? {}) })),
     ai: { ...d.ai, ...(s.ai ?? {}) },
     brand: { ...d.brand, ...(s.brand ?? {}), tagline: { ...d.brand.tagline, ...(s.brand?.tagline ?? {}) } },
@@ -149,6 +174,14 @@ export function toPublicDefault(): PublicConfig {
     bjp: c.bjp,
     interactions: c.interactions.map(({ imagePrompt: _a, videoPrompt: _b, action: _c, ...r }) => r),
     ai: { imageEnabled: false, videoEnabled: false, imageReady: false, videoReady: false },
+    ready: { yogi: false, modi: false, bjp: false },
     brand: c.brand,
   };
 }
+
+/** Only explicitly approved flat cutouts are customer-ready; models and references never count. */
+export const characterReady = (c: Character) =>
+  c.enabled && c.authorized && !!c.authorizedAt && !!c.permissionNote.trim() && Object.values(c.poses).some((p) => p && c.approvedAssets[p]);
+
+/** BJP artwork is usable only when uploaded, approved and enabled. */
+export const bjpUsable = (b: BjpItem) => !!b.asset && b.approved && !!b.approvedAt && !!b.permissionNote.trim() && b.enabled;

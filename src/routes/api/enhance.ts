@@ -3,7 +3,8 @@ import { INTERACTIONS } from "@/lib/config";
 
 const GATEWAY = "https://ai.gateway.lovable.dev";
 const MODEL = "openai/gpt-image-2.5-sunburst";
-const SCENES = ["yogi", "modi", "bjp"];
+/** AI runs only for the BJP Look. Yogi/Modi scenes never get AI images or videos of the leaders. */
+const SCENES = ["bjp"];
 
 /**
  * Post-capture AI image. Never called on live frames. The customer never types a prompt:
@@ -25,19 +26,15 @@ export const Route = createFileRoute("/api/enhance")({
           !SCENES.includes(scene) ||
           !(INTERACTIONS as readonly string[]).includes(interaction)
         ) {
-          return Response.json({ code: "invalid" }, { status: 400 });
+          return Response.json({ code: scene === "yogi" || scene === "modi" ? "not_allowed" : "invalid" }, { status: 400 });
         }
-        const { loadConfig, presetPrompt, referenceFor } = await import("@/lib/config.server");
+        const { loadConfig, presetPrompt, bjpReady } = await import("@/lib/config.server");
         const cfg = await loadConfig();
-        if (!cfg.ai.imageEnabled) return Response.json({ code: "not_configured" }, { status: 503 });
-        const ref = await referenceFor(cfg, scene);
+        if (!cfg.ai.imageEnabled || !bjpReady(cfg)) return Response.json({ code: "not_configured" }, { status: 503 });
         const out = new FormData();
         out.append("model", MODEL);
-        out.append("prompt", presetPrompt(cfg, scene, interaction, "image", !!ref));
-        if (ref) {
-          out.append("image[]", image, "capture.jpg");
-          out.append("image[]", ref, "reference.png");
-        } else out.append("image", image, "capture.jpg");
+        out.append("prompt", presetPrompt(cfg, "image"));
+        out.append("image", image, "capture.jpg");
         out.append("size", "1024x1536");
         out.append("output_format", "jpeg");
         const res = await fetch(`${GATEWAY}/v1/images/edits`, {

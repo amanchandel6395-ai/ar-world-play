@@ -20,6 +20,7 @@ export function ResultView({
   interaction,
   allowAi,
   allowVideo,
+  videoConfigured,
   onRetake,
   onHome,
 }: {
@@ -28,6 +29,8 @@ export function ResultView({
   interaction: InteractionId;
   allowAi: boolean;
   allowVideo: boolean;
+  /** admin switched video on but it has not passed an end-to-end test yet */
+  videoConfigured?: boolean;
   onRetake: () => void;
   onHome: () => void;
 }) {
@@ -160,7 +163,7 @@ export function ResultView({
         <img src={url} alt="Your ZUITAR photo" className="max-h-[70dvh] w-auto max-w-full rounded-2xl shadow-2xl lg:max-h-[88dvh]" />
         {showAi && (
           <span className="absolute left-6 top-6 rounded-full bg-warning px-4 py-1.5 text-sm font-bold uppercase tracking-wider text-background lg:left-12 lg:top-12">
-            AI Generated
+            {t.aiGenerated}
           </span>
         )}
         {aiBusy && (
@@ -198,7 +201,7 @@ export function ResultView({
             </div>
             {allowAi && !aiPhoto && (
               <button onClick={enhance} disabled={aiBusy} className="zt-btn-ghost border border-border">
-                ✦ AI enhance (creates an AI-generated version)
+                ✦ {t.aiLabel}
               </button>
             )}
             {aiPhoto && (
@@ -210,6 +213,9 @@ export function ResultView({
               <button onClick={makeVideo} className="zt-btn-ghost border border-border">
                 ▶ {t.makeVideo}
               </button>
+            )}
+            {!allowVideo && videoConfigured && (
+              <p className="rounded-2xl border border-border px-4 py-3 text-center text-sm text-muted-foreground">{t.videoUnavailable}</p>
             )}
             {video.state === "busy" && (
               <div className="flex items-center gap-3 rounded-2xl bg-card p-4">

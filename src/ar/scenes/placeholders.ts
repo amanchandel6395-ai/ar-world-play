@@ -3,53 +3,8 @@ import type { SceneContext, SceneLayers, SceneRuntime, TrackingFrame } from "./t
 import type { BjpItem, InteractionId, PublicConfig } from "@/lib/config";
 
 type PubChar = PublicConfig["characters"]["yogi"];
-const STAND_IN = "DEV STAND-IN · ASSET PENDING";
 const FIG_H = 175; // cm, natural adult height
 const HEAD_FROM_TOP = 12; // cm, head centre below top of figure
-
-function labelSprite(text: string, color = "#ffb347") {
-  const c = document.createElement("canvas");
-  c.width = 640;
-  c.height = 96;
-  const g = c.getContext("2d")!;
-  g.fillStyle = "rgba(10,10,14,0.78)";
-  g.beginPath();
-  g.roundRect(4, 4, 632, 88, 44);
-  g.fill();
-  g.fillStyle = color;
-  g.font = "600 34px 'Space Grotesk', sans-serif";
-  g.textAlign = "center";
-  g.textBaseline = "middle";
-  g.fillText(text, 320, 50);
-  const tex = new THREE.CanvasTexture(c);
-  tex.colorSpace = THREE.SRGBColorSpace;
-  const s = new THREE.Sprite(new THREE.SpriteMaterial({ map: tex, depthTest: false, transparent: true }));
-  s.scale.set(40, 6, 1);
-  s.renderOrder = 10;
-  return s;
-}
-
-/** Neutral stand-in figure (cm). Head centre at origin, body below. Never represents a real person. */
-export function buildFigure(color: number, label: string, unit = 1) {
-  const g = new THREE.Group();
-  const mat = new THREE.MeshStandardMaterial({ color, roughness: 0.45, metalness: 0.1, transparent: true });
-  const head = new THREE.Mesh(new THREE.SphereGeometry(10 * unit, 32, 16), mat);
-  const neck = new THREE.Mesh(new THREE.CylinderGeometry(4 * unit, 5 * unit, 8 * unit, 16), mat);
-  neck.position.y = -13 * unit;
-  const torso = new THREE.Mesh(new THREE.CapsuleGeometry(17 * unit, 40 * unit, 8, 24), mat);
-  torso.scale.z = 0.6;
-  torso.position.y = -50 * unit;
-  const legs = new THREE.Mesh(new THREE.CapsuleGeometry(13 * unit, 70 * unit, 8, 16), mat);
-  legs.scale.z = 0.6;
-  legs.position.y = -115 * unit;
-  g.add(head, neck, torso, legs);
-  const tag = labelSprite(label);
-  tag.name = "label";
-  tag.position.y = 22 * unit;
-  tag.scale.multiplyScalar(unit);
-  g.add(tag);
-  return g;
-}
 
 function addLights(group: THREE.Group) {
   group.add(new THREE.HemisphereLight(0xffffff, 0x334455, 2.2));
@@ -89,88 +44,42 @@ function disposeTree(obj: THREE.Object3D) {
   });
 }
 
-/** Loads authorized content: rigged GLB (with animation states) or transparent 2D poses. Head centre at origin, cm. */
+/** Approved flat photo-booth standee, tracked through the existing scene engine. */
 function authorizedContent(ch: PubChar, onReady: (o: THREE.Object3D) => void, onFail: () => void) {
   const holder = new THREE.Group();
-  let mixer: THREE.AnimationMixer | null = null;
-  let clips: THREE.AnimationClip[] = [];
   let plane: THREE.Mesh | null = null;
-  const texCache = new Map<string, Promise<THREE.Texture>>();
   let disposed = false;
-
-  const playClip = (id: InteractionId) => {
-    if (!mixer || !clips.length) return;
-    const want = (ch.animations[id] ?? id).toLowerCase();
-    const clip = clips.find((c) => c.name.toLowerCase() === want) ?? clips.find((c) => c.name.toLowerCase().includes(id)) ?? clips[0]!;
-    mixer.stopAllAction();
-    mixer.clipAction(clip).reset().fadeIn(0.3).play();
-  };
+  let request = 0;
   const showPose = (id: InteractionId) => {
+    const current = ++request;
     const url = ch.poses[id] ?? ch.poses.selfie ?? Object.values(ch.poses)[0];
-    if (!url) return;
-    if (!texCache.has(url)) texCache.set(url, loadTex(url));
-    texCache.get(url)!.then((tex) => {
-      if (disposed) return;
+    if (!url) { onFail(); return; }
+    loadTex(url).then((tex) => {
+      if (disposed || request !== current) { tex.dispose(); return; }
       const img = tex.image as { width: number; height: number };
-      const h = FIG_H;
-      const w = (h * img.width) / Math.max(1, img.height);
       if (!plane) {
-        plane = new THREE.Mesh(
-          new THREE.PlaneGeometry(1, 1),
-          new THREE.MeshBasicMaterial({ map: tex, transparent: true, alphaTest: 0.04, side: THREE.DoubleSide }),
-        );
+        plane = new THREE.Mesh(new THREE.PlaneGeometry(1, 1), new THREE.MeshBasicMaterial({ map: tex, transparent: true, alphaTest: 0.04, side: THREE.DoubleSide }));
         holder.add(plane);
-        onReady(holder);
-      } else (plane.material as THREE.MeshBasicMaterial).map = tex;
-      plane.scale.set(w, h, 1);
-      plane.position.set(0, HEAD_FROM_TOP - h / 2, 0);
+      } else {
+        const mat = plane.material as THREE.MeshBasicMaterial;
+        mat.map?.dispose(); mat.map = tex; mat.needsUpdate = true;
+      }
+      plane.scale.set(FIG_H * img.width / Math.max(1, img.height), FIG_H, 1);
+      plane.position.set(0, HEAD_FROM_TOP - FIG_H / 2, 0);
+      onReady(holder);
     }, onFail);
   };
-
-  if (ch.glb) {
-    import("three/examples/jsm/loaders/GLTFLoader.js")
-      .then(({ GLTFLoader }) => new GLTFLoader().loadAsync(ch.glb!))
-      .then((gltf) => {
-        if (disposed) return;
-        const model = gltf.scene;
-        const box = new THREE.Box3().setFromObject(model);
-        const size = box.getSize(new THREE.Vector3());
-        const s = FIG_H / Math.max(0.0001, size.y);
-        model.scale.setScalar(s);
-        model.position.set(-((box.min.x + box.max.x) / 2) * s, HEAD_FROM_TOP - box.max.y * s, -((box.min.z + box.max.z) / 2) * s);
-        holder.add(model);
-        clips = gltf.animations;
-        if (clips.length) mixer = new THREE.AnimationMixer(model);
-        playClip("selfie");
-        onReady(holder);
-      })
-      .catch(onFail);
-  } else showPose("selfie");
-
-  return {
-    holder,
-    setInteraction(id: InteractionId) {
-      if (mixer) playClip(id);
-      else showPose(id);
-    },
-    tick(dt: number) {
-      mixer?.update(dt);
-    },
-    dispose() {
-      disposed = true;
-      mixer?.stopAllAction();
-      disposeTree(holder);
-    },
-  };
+  showPose("selfie");
+  return { holder, setInteraction: showPose, tick: (_dt: number) => undefined, dispose() { disposed = true; disposeTree(holder); } };
 }
-
-const hasAuthorizedAsset = (ch: PubChar) => ch.authorized && (!!ch.glb || Object.keys(ch.poses).length > 0);
+const hasAuthorizedAsset = (ch: PubChar) => ch.enabled && ch.authorized && !!ch.authorizedAt && Object.keys(ch.poses).length > 0;
+const noop = () => undefined;
 
 /**
  * Companion that stands beside the tracked user. Placement uses normalized image coordinates and the
  * visible (cropped) viewport, so the figure is always framed at natural selfie scale and never off-screen.
  */
-export function companionRuntime(layers: SceneLayers, ctx: SceneContext, ch: PubChar, color: number): SceneRuntime {
+export function companionRuntime(layers: SceneLayers, _ctx: SceneContext, ch: PubChar): SceneRuntime {
   addLights(layers.back);
   const root = new THREE.Group();
   root.visible = false;
@@ -178,20 +87,19 @@ export function companionRuntime(layers: SceneLayers, ctx: SceneContext, ch: Pub
   const content = new THREE.Group();
   root.add(content);
 
-  let standIn = !hasAuthorizedAsset(ch);
-  const fig = buildFigure(color, STAND_IN);
-  const showStandIn = () => {
+  // `standIn` = no approved asset is available. Nothing is rendered then; the UI shows a setup message
+  // and disables capture. A fake/neutral figure is never shown to customers.
+  let standIn = true;
+  const showMissing = () => {
     standIn = true;
     content.clear();
-    content.add(fig);
   };
   let auth: ReturnType<typeof authorizedContent> | null = null;
-  if (standIn) showStandIn();
-  else {
+  if (hasAuthorizedAsset(ch)) {
     auth = authorizedContent(
       ch,
-      (o) => { content.clear(); content.add(o); },
-      () => showStandIn(),
+      (o) => { content.clear(); content.add(o); standIn = false; },
+      () => showMissing(),
     );
   }
   content.scale.setScalar(ch.scale || 1);
@@ -216,9 +124,8 @@ export function companionRuntime(layers: SceneLayers, ctx: SceneContext, ch: Pub
     },
     update(t: TrackingFrame) {
       auth?.tick(t.dt);
-      const label = fig.getObjectByName("label");
-      if (label) label.scale.x = Math.abs(label.scale.x) * (t.mirrored ? -1 : 1);
-      if (content.children[0] && content.children[0] !== fig) content.scale.x = Math.abs(content.scale.y) * (t.mirrored ? -1 : 1);
+      // The shared canvas is unmirrored; artwork retains its original orientation.
+      if (content.children[0]) content.scale.x = Math.abs(content.scale.y) * (t.mirrored ? -1 : 1);
 
       if (t.head) {
         lost = 0;
@@ -256,13 +163,12 @@ export function companionRuntime(layers: SceneLayers, ctx: SceneContext, ch: Pub
     },
     dispose() {
       auth?.dispose();
-      disposeTree(fig);
     },
   };
   return runtime;
 }
 
-function imagePlane(url: string, item: BjpItem, onAspect: (a: number) => void) {
+function imagePlane(url: string, item: BjpItem, onAspect: (a: number) => void, onReady: () => void = noop) {
   const mat = new THREE.MeshBasicMaterial({ transparent: true, alphaTest: 0.02, side: THREE.DoubleSide, depthTest: false });
   const mesh = new THREE.Mesh(new THREE.PlaneGeometry(1, 1), mat);
   mesh.renderOrder = 20 + item.order;
@@ -273,6 +179,7 @@ function imagePlane(url: string, item: BjpItem, onAspect: (a: number) => void) {
     const img = t.image as { width: number; height: number };
     onAspect(img.height / Math.max(1, img.width));
     mesh.visible = true;
+    onReady();
   }, () => undefined);
   return mesh;
 }
@@ -280,10 +187,8 @@ function imagePlane(url: string, item: BjpItem, onAspect: (a: number) => void) {
 /** BJP Look: configurable items on head (face 6DoF), shoulders (body pose) and screen frame layer. */
 export function lookRuntime(layers: SceneLayers, ctx: SceneContext): SceneRuntime & { backgroundUrl?: string | undefined } {
   addLights(layers.front);
-  const items = [...ctx.config.bjp].filter((b) => b.enabled).sort((a, b) => a.order - b.order);
-  const saffron = new THREE.MeshStandardMaterial({ color: 0xff8a1f, roughness: 0.6 });
-  const green = new THREE.MeshStandardMaterial({ color: 0x138a3d, roughness: 0.6 });
-  const white = new THREE.MeshStandardMaterial({ color: 0xf5f5f0, roughness: 0.6 });
+  // Only the exact uploaded artwork that an admin approved is rendered. No built-in/substitute symbols.
+  const items = [...ctx.config.bjp].filter((b) => b.enabled && b.approved && b.asset).sort((a, b) => a.order - b.order);
 
   const headAnchor = new THREE.Group();
   headAnchor.matrixAutoUpdate = false;
@@ -297,74 +202,34 @@ export function lookRuntime(layers: SceneLayers, ctx: SceneContext): SceneRuntim
   const mirrorables: THREE.Object3D[] = [];
   const screenItems: { mesh: THREE.Mesh; item: BjpItem; aspect: number }[] = [];
   let backgroundUrl: string | undefined;
+  let loaded = 0;
 
   for (const it of items) {
-    if (it.id === "builtin-cap" && !it.asset) {
-      const cap = new THREE.Group();
-      const dome = new THREE.Mesh(new THREE.SphereGeometry(9.6, 32, 16, 0, Math.PI * 2, 0, Math.PI / 2), saffron);
-      dome.scale.set(1, 0.7, 1.1);
-      const brim = new THREE.Mesh(new THREE.CylinderGeometry(7, 7, 0.5, 32, 1, false, -Math.PI / 2, Math.PI), saffron);
-      brim.scale.set(1, 1, 1.3);
-      brim.position.set(0, 0, 8);
-      const band = new THREE.Mesh(new THREE.TorusGeometry(9.6, 0.5, 8, 48), green);
-      band.rotation.x = Math.PI / 2;
-      band.scale.set(1, 1.1, 1);
-      cap.add(dome, brim, band);
-      cap.position.set(it.offsetX, 5.5 + it.offsetY, -1.5);
-      cap.rotation.x = -0.12;
-      cap.rotation.z = THREE.MathUtils.degToRad(it.rotation);
-      cap.scale.setScalar(it.scale || 1);
-      headAnchor.add(cap);
-      continue;
-    }
-    if (it.id === "builtin-scarf" && !it.asset) {
-      const curve = new THREE.CatmullRomCurve3([
-        new THREE.Vector3(-0.55, 0.05, -0.1),
-        new THREE.Vector3(-0.35, -0.25, 0.15),
-        new THREE.Vector3(0, -0.4, 0.22),
-        new THREE.Vector3(0.35, -0.25, 0.15),
-        new THREE.Vector3(0.55, 0.05, -0.1),
-      ]);
-      const scarf = new THREE.Group();
-      const s1 = new THREE.Mesh(new THREE.TubeGeometry(curve, 48, 0.07, 12), saffron);
-      const s2 = new THREE.Mesh(new THREE.TubeGeometry(curve, 48, 0.02, 8), white);
-      s2.position.y = -0.07;
-      const s3 = new THREE.Mesh(new THREE.TubeGeometry(curve, 48, 0.035, 8), green);
-      s3.position.y = -0.11;
-      for (const x of [-0.42, 0.42]) {
-        const tail = new THREE.Mesh(new THREE.BoxGeometry(0.16, 0.7, 0.03), saffron);
-        tail.position.set(x, -0.42, 0.18);
-        scarf.add(tail);
-      }
-      scarf.add(s1, s2, s3);
-      scarf.scale.setScalar(it.scale || 1);
-      scarf.position.set(it.offsetX / 100, it.offsetY / 100, 0);
-      shoulderAnchor.add(scarf);
-      continue;
-    }
     if (!it.asset) continue;
     if (it.anchor === "background") {
+      // Preflight background too; capture remains disabled until the asset loads.
+      loadTex(it.asset).then((t) => { loaded++; t.dispose(); }, noop);
       backgroundUrl = it.asset;
       continue;
     }
     const rot = THREE.MathUtils.degToRad(it.rotation);
     if (it.anchor === "head") {
       const w = 20 * (it.scale || 1);
-      const m = imagePlane(it.asset, it, (a) => m.scale.set(w, w * a, 1));
+      const m = imagePlane(it.asset, it, (a) => m.scale.set(w, w * a, 1), () => { loaded++; });
       m.position.set(it.offsetX, 9 + it.offsetY, 4);
       m.rotation.z = rot;
       headAnchor.add(m);
       mirrorables.push(m);
     } else if (it.anchor === "shoulders") {
       const w = it.scale || 1;
-      const m = imagePlane(it.asset, it, (a) => m.scale.set(w, w * a, 1));
+      const m = imagePlane(it.asset, it, (a) => m.scale.set(w, w * a, 1), () => { loaded++; });
       m.position.set(it.offsetX / 100, -0.25 + it.offsetY / 100, 0.25);
       m.rotation.z = rot;
       shoulderAnchor.add(m);
       mirrorables.push(m);
     } else {
       const entry = { mesh: null as unknown as THREE.Mesh, item: it, aspect: 1 };
-      entry.mesh = imagePlane(it.asset, it, (a) => (entry.aspect = a));
+      entry.mesh = imagePlane(it.asset, it, (a) => (entry.aspect = a), () => { loaded++; });
       entry.mesh.rotation.z = rot;
       screenAnchor.add(entry.mesh);
       screenItems.push(entry);
@@ -376,7 +241,7 @@ export function lookRuntime(layers: SceneLayers, ctx: SceneContext): SceneRuntim
   let lostS = 0;
   return {
     backgroundUrl,
-    standIn: items.some((i) => i.id.startsWith("builtin")),
+    get standIn() { return items.length === 0 || loaded < items.length; },
     reset() {
       headAnchor.visible = false;
       shoulderAnchor.visible = false;
@@ -428,8 +293,8 @@ export function lookRuntime(layers: SceneLayers, ctx: SceneContext): SceneRuntim
   };
 }
 
-/** Metre-scale world AR companion for floor placement (authorized asset when configured, else labelled stand-in). */
-export function worldCompanion(ctx: SceneContext, ch: PubChar, color: number) {
+/** Metre-scale world AR companion for floor placement (authorized asset only; empty when not configured). */
+export function worldCompanion(ctx: SceneContext, ch: PubChar) {
   const g = new THREE.Group();
   const disc = new THREE.Mesh(
     new THREE.CircleGeometry(0.4, 48).rotateX(-Math.PI / 2),
@@ -441,13 +306,8 @@ export function worldCompanion(ctx: SceneContext, ch: PubChar, color: number) {
   holder.scale.setScalar(0.01 * (ch.scale || 1));
   holder.position.y = (FIG_H - HEAD_FROM_TOP) * 0.01 * (ch.scale || 1);
   g.add(holder);
-  const standIn = () => {
-    holder.clear();
-    holder.add(buildFigure(color, STAND_IN));
-  };
-  if (!hasAuthorizedAsset(ch)) standIn();
-  else {
-    const a = authorizedContent(ch, (o) => { holder.clear(); holder.add(o); }, standIn);
+  if (hasAuthorizedAsset(ch)) {
+    const a = authorizedContent(ch, (o) => { holder.clear(); holder.add(o); }, noop);
     a.setInteraction(ctx.interaction);
     disc.onBeforeRender = () => a.tick(1 / 60);
   }

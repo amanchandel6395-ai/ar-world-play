@@ -1,7 +1,7 @@
 import type { SceneConfig } from "./types";
 import { companionRuntime, lookRuntime, worldCompanion } from "./placeholders";
 
-const companion = (id: "yogi" | "modi", color: number): SceneConfig => ({
+const companion = (id: "yogi" | "modi"): SceneConfig => ({
   id,
   tracking: "face+body",
   anchor: "beside-user",
@@ -9,12 +9,12 @@ const companion = (id: "yogi" | "modi", color: number): SceneConfig => ({
   camera: { default: "user", worldAR: true },
   effects: { backgroundTint: null },
   capture: { countdown: 3 },
-  build: (layers, ctx) => companionRuntime(layers, ctx, ctx.config.characters[id], color),
-  buildWorld: (ctx) => worldCompanion(ctx, ctx.config.characters[id], color),
+  build: (layers, ctx) => companionRuntime(layers, ctx, ctx.config.characters[id]),
+  buildWorld: (ctx) => worldCompanion(ctx, ctx.config.characters[id]),
 });
 
-export const YOGI_SCENE = companion("yogi", 0xe8792b);
-export const MODI_SCENE = companion("modi", 0xd9d4c7);
+export const YOGI_SCENE = companion("yogi");
+export const MODI_SCENE = companion("modi");
 
 export const BJP_LOOK_SCENE: SceneConfig = {
   id: "bjp",
