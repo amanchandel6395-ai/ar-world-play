@@ -65,6 +65,8 @@ export type AppConfig = {
   characters: Record<CharacterId, Character>;
   bjp: BjpItem[];
   interactions: Interaction[];
+  /** Independent switch for the fictional, post-capture test experience. */
+  demo: { enabled: boolean };
   ai: {
     /** BJP Look post-capture styling only. AI is never used for Yogi/Modi scenes. */
     imageEnabled: boolean;
@@ -85,6 +87,7 @@ export type PublicConfig = {
   bjp: BjpItem[];
   interactions: Omit<Interaction, "imagePrompt" | "videoPrompt" | "action">[];
   ai: { imageEnabled: boolean; videoEnabled: boolean; imageReady: boolean; videoReady: boolean };
+  demo: { aiReady: boolean };
   /** Per-scene readiness: true only when an authorized/approved asset is configured. */
   ready: Record<CharacterId | "bjp", boolean>;
   brand: AppConfig["brand"];
@@ -130,6 +133,7 @@ export const DEFAULT_CONFIG: AppConfig = {
     ix("meeting", "💬", "Meeting", "मुलाक़ात", "seated in a friendly formal meeting"),
     ix("event", "🎉", "Event", "कार्यक्रम", "on stage at a public event with a festive crowd behind"),
   ],
+  demo: { enabled: true },
   ai: {
     imageEnabled: false,
     videoEnabled: false,
@@ -161,6 +165,7 @@ export function mergeConfig(stored: unknown): AppConfig {
       .filter((b) => b && !String(b.id).startsWith("builtin"))
       .map((b) => ({ ...b, approvedAt: b.approvedAt ?? null, permissionNote: b.permissionNote ?? "" })),
     interactions: d.interactions.map((di) => ({ ...di, ...(s.interactions?.find((x) => x.id === di.id) ?? {}) })),
+    demo: { enabled: typeof s.demo?.enabled === "boolean" ? s.demo.enabled : d.demo.enabled },
     ai: { ...d.ai, ...(s.ai ?? {}) },
     brand: { ...d.brand, ...(s.brand ?? {}), tagline: { ...d.brand.tagline, ...(s.brand?.tagline ?? {}) } },
   };
@@ -174,6 +179,7 @@ export function toPublicDefault(): PublicConfig {
     bjp: c.bjp,
     interactions: c.interactions.map(({ imagePrompt: _a, videoPrompt: _b, action: _c, ...r }) => r),
     ai: { imageEnabled: false, videoEnabled: false, imageReady: false, videoReady: false },
+    demo: { aiReady: false },
     ready: { yogi: false, modi: false, bjp: false },
     brand: c.brand,
   };
