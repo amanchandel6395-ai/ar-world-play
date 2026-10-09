@@ -3,8 +3,8 @@ import { INTERACTIONS } from "@/lib/config";
 
 const GATEWAY = "https://ai.gateway.lovable.dev";
 const MODEL = "openai/gpt-image-2.5-sunburst";
-/** AI runs only for the BJP Look. Yogi/Modi scenes never get AI images or videos of the leaders. */
-const SCENES = ["bjp", "photo"];
+/** Fictional demo and faithful photo enhancement are separate from authorized asset styling. */
+const SCENES: string[] = ["bjp", "photo", "demo"];
 
 /**
  * Post-capture AI image. Never called on live frames. The customer never types a prompt:
@@ -30,12 +30,16 @@ export const Route = createFileRoute("/api/enhance")({
         }
         const { loadConfig, presetPrompt, bjpReady } = await import("@/lib/config.server");
         const cfg = await loadConfig();
-        if (!cfg.ai.imageEnabled || (scene === "bjp" && !bjpReady(cfg))) return Response.json({ code: "not_configured" }, { status: 503 });
+        if (scene === "demo" ? !cfg.demo.enabled : !cfg.ai.imageEnabled || (scene === "bjp" && !bjpReady(cfg))) {
+          return Response.json({ code: "not_configured" }, { status: 503 });
+        }
         const out = new FormData();
         out.append("model", MODEL);
-        const prompt = scene === "photo"
-          ? "Make a subtle, faithful enhancement of this single customer photo. Improve exposure, white balance, contrast and detail. Preserve the person’s exact identity, face shape, expression, pose, skin tone, clothing and all existing objects, symbols and text. Do not add or remove people or objects. Do not add political content, logos, flags or text. Do not reshape or beautify the face. Keep the result realistic and faithful to the original."
-          : presetPrompt(cfg, "image");
+        const prompt = scene === "demo"
+          ? "Create a clearly AI-generated demo selfie from this single customer photo. Preserve the customer's identity, face, expression, pose, skin tone and clothing. Add exactly one friendly, clearly fictional non-human orange robot companion with a simple original design, standing beside the customer as if posing for a casual selfie. The robot must not resemble any real person or recognizable character. Do not add any other people, public figures, political content, logos, flags, slogans or text. Keep the customer recognizable and the result respectful."
+          : scene === "photo"
+            ? "Make a subtle, faithful enhancement of this single customer photo. Improve exposure, white balance, contrast and detail. Preserve the person’s exact identity, face shape, expression, pose, skin tone, clothing and all existing objects, symbols and text. Do not add or remove people or objects. Do not add political content, logos, flags or text. Do not reshape or beautify the face. Keep the result realistic and faithful to the original."
+            : presetPrompt(cfg, "image");
         out.append("prompt", prompt);
         out.append("image", image, "capture.jpg");
         out.append("size", "1024x1536");
