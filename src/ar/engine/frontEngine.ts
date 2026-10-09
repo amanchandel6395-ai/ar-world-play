@@ -162,7 +162,7 @@ export async function startFrontEngine(opts: {
   const front = new THREE.Group();
   backScene.add(back);
   frontScene.add(front);
-  const runtime = scene.build({ back, front }, opts.ctx) as ReturnType<SceneConfig["build"]> & { backgroundUrl?: string };
+  const runtime = scene.build({ back, front }, opts.ctx) as ReturnType<SceneConfig["build"]> & { backgroundUrl?: string | undefined };
   if (runtime.backgroundUrl) {
     new THREE.TextureLoader().setCrossOrigin("anonymous").load(runtime.backgroundUrl, (t) => {
       t.colorSpace = THREE.SRGBColorSpace;

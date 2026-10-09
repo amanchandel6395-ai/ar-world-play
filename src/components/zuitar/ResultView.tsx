@@ -1,9 +1,11 @@
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import QRCode from "qrcode";
 import { useServerFn } from "@tanstack/react-start";
 import { createShare } from "@/lib/share.functions";
 import { KIOSK, useIdleReset } from "@/lib/kiosk";
 import type { SceneId } from "@/ar/scenes";
+import type { InteractionId } from "@/lib/config";
+import { useLang } from "@/lib/i18n";
 
 async function toBase64(b: Blob) {
   const buf = new Uint8Array(await b.arrayBuffer());
@@ -15,13 +17,17 @@ async function toBase64(b: Blob) {
 export function ResultView({
   photo,
   sceneId,
+  interaction,
   allowAi,
+  allowVideo,
   onRetake,
   onHome,
 }: {
   photo: Blob;
   sceneId: SceneId;
+  interaction: InteractionId;
   allowAi: boolean;
+  allowVideo: boolean;
   onRetake: () => void;
   onHome: () => void;
 }) {
@@ -32,6 +38,26 @@ export function ResultView({
   const [qr, setQr] = useState<string | null>(null);
   const [qrBusy, setQrBusy] = useState(false);
   const share = useServerFn(createShare);
+  const [, , t] = useLang();
+  const [video, setVideo] = useState<{ state: "idle" | "busy" | "ready"; url?: string; progress?: number | null }>({ state: "idle" });
+  const [videoMsg, setVideoMsg] = useState<string | null>(null);
+  const alive = useRef(true);
+  const pollTimer = useRef<number | undefined>(undefined);
+  useEffect(() => {
+    alive.current = true;
+    return () => {
+      alive.current = false;
+      window.clearTimeout(pollTimer.current);
+    };
+  }, []);
+  const codeMsg = (code: string | undefined, kind: "ai" | "video") =>
+    code === "not_configured"
+      ? kind === "ai" ? t.aiNotSetup : t.videoNotSetup
+      : code === "credits"
+        ? t.aiCredits
+        : code === "busy"
+          ? t.aiBusy
+          : kind === "ai" ? t.aiFail : t.videoFail;
   useIdleReset(KIOSK.resultTimeoutMs, onHome);
 
   const current = showAi && aiPhoto ? aiPhoto : photo;
@@ -66,8 +92,12 @@ export function ResultView({
       const fd = new FormData();
       fd.append("image", photo, "capture.jpg");
       fd.append("scene", sceneId);
+      fd.append("interaction", interaction);
       const res = await fetch("/api/enhance", { method: "POST", body: fd });
-      if (!res.ok) throw new Error(await res.text());
+      if (!res.ok) {
+        const j = (await res.json().catch(() => ({}))) as { code?: string };
+        throw new Error(codeMsg(j.code, "ai"));
+      }
       const { b64 } = (await res.json()) as { b64: string };
       const bin = Uint8Array.from(atob(b64), (c) => c.charCodeAt(0));
       setAiPhoto(new Blob([bin], { type: "image/jpeg" }));
@@ -77,6 +107,50 @@ export function ResultView({
       setMsg(e instanceof Error && e.message ? e.message : "AI enhancement failed.");
     } finally {
       setAiBusy(false);
+    }
+  };
+
+  const makeVideo = async () => {
+    setVideo({ state: "busy", progress: null });
+    setVideoMsg(null);
+    const fail = (m: string) => {
+      if (!alive.current) return;
+      setVideo({ state: "idle" });
+      setVideoMsg(m);
+    };
+    try {
+      const fd = new FormData();
+      fd.append("image", photo, "capture.jpg");
+      fd.append("scene", sceneId);
+      fd.append("interaction", interaction);
+      const res = await fetch("/api/video", { method: "POST", body: fd });
+      const j = (await res.json().catch(() => ({}))) as { id?: string; code?: string };
+      if (!res.ok || !j.id) return fail(codeMsg(j.code, "video"));
+      const id = j.id;
+      const deadline = Date.now() + 6 * 60_000;
+      const poll = async () => {
+        if (!alive.current) return;
+        if (Date.now() > deadline) return fail(t.videoFail);
+        try {
+          const r = await fetch(`/api/video?id=${encodeURIComponent(id)}`);
+          const p = (await r.json().catch(() => ({}))) as { status?: string; url?: string | null; progress?: number | null; code?: string };
+          if (!alive.current) return;
+          if (!r.ok) {
+            if (r.status === 429 || r.status >= 500) pollTimer.current = window.setTimeout(poll, 8000);
+            else fail(codeMsg(p.code, "video"));
+            return;
+          }
+          if (p.status === "completed" && p.url) return setVideo({ state: "ready", url: p.url });
+          if (p.status === "failed") return fail(t.videoFail);
+          setVideo({ state: "busy", progress: p.progress ?? null });
+          pollTimer.current = window.setTimeout(poll, 6000);
+        } catch {
+          pollTimer.current = window.setTimeout(poll, 8000);
+        }
+      };
+      pollTimer.current = window.setTimeout(poll, 5000);
+    } catch {
+      fail(t.videoFail);
     }
   };
 
@@ -132,9 +206,34 @@ export function ResultView({
                 {showAi ? "Show original photo" : "Show AI-generated version"}
               </button>
             )}
-            <button disabled className="zt-btn-ghost opacity-60">
-              Video coming soon
-            </button>
+            {allowVideo && video.state === "idle" && (
+              <button onClick={makeVideo} className="zt-btn-ghost border border-border">
+                ▶ {t.makeVideo}
+              </button>
+            )}
+            {video.state === "busy" && (
+              <div className="flex items-center gap-3 rounded-2xl bg-card p-4">
+                <div className="h-6 w-6 shrink-0 animate-spin rounded-full border-4 border-muted border-t-primary" />
+                <p className="text-sm">
+                  {t.videoWorking}
+                  {typeof video.progress === "number" ? ` ${Math.round(video.progress)}%` : ""}
+                </p>
+              </div>
+            )}
+            {video.state === "ready" && video.url && (
+              <div className="flex flex-col gap-2 rounded-2xl bg-card p-3">
+                <div className="relative">
+                  <video src={video.url} controls playsInline className="mx-auto max-h-[50dvh] rounded-xl" aria-label={t.videoReady} />
+                  <span className="absolute left-2 top-2 rounded-full bg-warning px-3 py-1 text-xs font-bold uppercase text-background">
+                    {t.aiGenerated}
+                  </span>
+                </div>
+                <a href={video.url} download="zuitar-ai-video.mp4" target="_blank" rel="noreferrer" className="zt-btn-secondary text-center">
+                  {t.downloadVideo}
+                </a>
+              </div>
+            )}
+            {videoMsg && <p className="text-center text-destructive">{videoMsg}</p>}
           </>
         )}
         {msg && <p className="text-center text-destructive">{msg}</p>}
