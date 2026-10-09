@@ -278,7 +278,7 @@ function imagePlane(url: string, item: BjpItem, onAspect: (a: number) => void) {
 }
 
 /** BJP Look: configurable items on head (face 6DoF), shoulders (body pose) and screen frame layer. */
-export function lookRuntime(layers: SceneLayers, ctx: SceneContext): SceneRuntime & { backgroundUrl?: string } {
+export function lookRuntime(layers: SceneLayers, ctx: SceneContext): SceneRuntime & { backgroundUrl?: string | undefined } {
   addLights(layers.front);
   const items = [...ctx.config.bjp].filter((b) => b.enabled).sort((a, b) => a.order - b.order);
   const saffron = new THREE.MeshStandardMaterial({ color: 0xff8a1f, roughness: 0.6 });

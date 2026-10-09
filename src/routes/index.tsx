@@ -2,6 +2,7 @@ import { createFileRoute, Link } from "@tanstack/react-router";
 import { useRef, useState } from "react";
 import { SCENES, type SceneId } from "@/ar/scenes";
 import { useDevMode } from "@/lib/kiosk";
+import { DICTS } from "@/lib/i18n";
 
 export const Route = createFileRoute("/")({
   head: () => ({
@@ -70,7 +71,7 @@ function Home() {
               <br />
               {names[c.id][1]}
             </h2>
-            <p className="mt-2 text-muted-foreground">{SCENES[c.id].subtitle}</p>
+            <p className="mt-2 text-muted-foreground">{DICTS.en[`${c.id}Sub`]}</p>
             <span className="mt-5 inline-flex w-fit items-center rounded-full bg-primary px-6 py-3 text-lg font-semibold text-primary-foreground">
               Start →
             </span>
