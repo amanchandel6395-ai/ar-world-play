@@ -89,7 +89,7 @@ describe("Workflow Tests: Complete Repository Repair & Features", () => {
   });
 
   it("G. Validates reference asset URL resolution and signing", async () => {
-    const yogiAsset = REFERENCE_ASSETS.find((a) => a.candidate === "yogi");
+    const yogiAsset = REFERENCE_ASSETS.find((a) => "candidate" in a && a.candidate === "yogi");
     if (!yogiAsset || !("url" in yogiAsset)) throw new Error("Missing yogi asset");
     const fullUrl = referenceUrl(yogiAsset.url);
     expect(fullUrl).toContain("dc5afdb0fe2b72a63ddddacca5ad7fc1.png");
