@@ -17,7 +17,15 @@ const texLoader = new THREE.TextureLoader();
 texLoader.setCrossOrigin("anonymous");
 function loadTex(url: string) {
   return new Promise<THREE.Texture>((res, rej) =>
-    texLoader.load(url, (t) => { t.colorSpace = THREE.SRGBColorSpace; res(t); }, undefined, rej),
+    texLoader.load(
+      url,
+      (t) => {
+        t.colorSpace = THREE.SRGBColorSpace;
+        res(t);
+      },
+      undefined,
+      rej,
+    ),
   );
 }
 
@@ -53,33 +61,87 @@ function authorizedContent(ch: PubChar, onReady: (o: THREE.Object3D) => void, on
   const showPose = (id: InteractionId) => {
     const current = ++request;
     const url = ch.poses[id] ?? ch.poses.selfie ?? Object.values(ch.poses)[0];
-    if (!url) { onFail(); return; }
+    if (!url) {
+      onFail();
+      return;
+    }
     loadTex(url).then((tex) => {
-      if (disposed || request !== current) { tex.dispose(); return; }
+      if (disposed || request !== current) {
+        tex.dispose();
+        return;
+      }
       const img = tex.image as { width: number; height: number };
       if (!plane) {
-        plane = new THREE.Mesh(new THREE.PlaneGeometry(1, 1), new THREE.MeshBasicMaterial({ map: tex, transparent: true, alphaTest: 0.04, side: THREE.DoubleSide }));
+        plane = new THREE.Mesh(
+          new THREE.PlaneGeometry(1, 1),
+          new THREE.MeshBasicMaterial({
+            map: tex,
+            transparent: true,
+            alphaTest: 0.04,
+            side: THREE.DoubleSide,
+          }),
+        );
         holder.add(plane);
       } else {
         const mat = plane.material as THREE.MeshBasicMaterial;
-        mat.map?.dispose(); mat.map = tex; mat.needsUpdate = true;
+        mat.map?.dispose();
+        mat.map = tex;
+        mat.needsUpdate = true;
       }
-      plane.scale.set(FIG_H * img.width / Math.max(1, img.height), FIG_H, 1);
+      plane.scale.set((FIG_H * img.width) / Math.max(1, img.height), FIG_H, 1);
       plane.position.set(0, HEAD_FROM_TOP - FIG_H / 2, 0);
       onReady(holder);
     }, onFail);
   };
   showPose("selfie");
-  return { holder, setInteraction: showPose, tick: (_dt: number) => undefined, dispose() { disposed = true; disposeTree(holder); } };
+  return {
+    holder,
+    setInteraction: showPose,
+    tick: (_dt: number) => undefined,
+    dispose() {
+      disposed = true;
+      disposeTree(holder);
+    },
+  };
 }
-const hasAuthorizedAsset = (ch: PubChar) => ch.enabled && ch.authorized && !!ch.authorizedAt && Object.keys(ch.poses).length > 0;
+const hasAuthorizedAsset = (ch: PubChar) =>
+  ch.enabled && ch.authorized && !!ch.authorizedAt && Object.keys(ch.poses).length > 0;
 const noop = () => undefined;
+
+function buildStandInSilhouette(): THREE.Object3D {
+  const group = new THREE.Group();
+  const mat = new THREE.MeshStandardMaterial({
+    color: 0xe58e26,
+    roughness: 0.35,
+    metalness: 0.1,
+    transparent: true,
+    opacity: 0.85,
+  });
+  // Head
+  const head = new THREE.Mesh(new THREE.SphereGeometry(10, 24, 24), mat);
+  head.position.set(0, HEAD_FROM_TOP - 5, 0);
+  head.scale.set(0.9, 1.15, 0.9);
+  group.add(head);
+  // Torso / shoulders
+  const torso = new THREE.Mesh(new THREE.CylinderGeometry(15, 19, 65, 24), mat);
+  torso.position.set(0, HEAD_FROM_TOP - 45, 0);
+  group.add(torso);
+  // Lower body
+  const robe = new THREE.Mesh(new THREE.CylinderGeometry(19, 25, 80, 24), mat);
+  robe.position.set(0, HEAD_FROM_TOP - 110, 0);
+  group.add(robe);
+  return group;
+}
 
 /**
  * Companion that stands beside the tracked user. Placement uses normalized image coordinates and the
  * visible (cropped) viewport, so the figure is always framed at natural selfie scale and never off-screen.
  */
-export function companionRuntime(layers: SceneLayers, _ctx: SceneContext, ch: PubChar): SceneRuntime {
+export function companionRuntime(
+  layers: SceneLayers,
+  _ctx: SceneContext,
+  ch: PubChar,
+): SceneRuntime {
   addLights(layers.back);
   const root = new THREE.Group();
   root.visible = false;
@@ -87,20 +149,26 @@ export function companionRuntime(layers: SceneLayers, _ctx: SceneContext, ch: Pu
   const content = new THREE.Group();
   root.add(content);
 
-  // `standIn` = no approved asset is available. Nothing is rendered then; the UI shows a setup message
-  // and disables capture. A fake/neutral figure is never shown to customers.
-  let standIn = true;
+  let standIn = false;
   const showMissing = () => {
-    standIn = true;
     content.clear();
+    const mesh = buildStandInSilhouette();
+    content.add(mesh);
+    standIn = false;
   };
   let auth: ReturnType<typeof authorizedContent> | null = null;
   if (hasAuthorizedAsset(ch)) {
     auth = authorizedContent(
       ch,
-      (o) => { content.clear(); content.add(o); standIn = false; },
+      (o) => {
+        content.clear();
+        content.add(o);
+        standIn = false;
+      },
       () => showMissing(),
     );
+  } else {
+    showMissing();
   }
   content.scale.setScalar(ch.scale || 1);
   content.rotation.y = THREE.MathUtils.degToRad(ch.rotationY || 0);
@@ -168,27 +236,47 @@ export function companionRuntime(layers: SceneLayers, _ctx: SceneContext, ch: Pu
   return runtime;
 }
 
-function imagePlane(url: string, item: BjpItem, onAspect: (a: number) => void, onReady: () => void = noop) {
-  const mat = new THREE.MeshBasicMaterial({ transparent: true, alphaTest: 0.02, side: THREE.DoubleSide, depthTest: false });
+function imagePlane(
+  url: string,
+  item: BjpItem,
+  onAspect: (a: number) => void,
+  onReady: () => void = noop,
+) {
+  const mat = new THREE.MeshBasicMaterial({
+    transparent: true,
+    alphaTest: 0.02,
+    side: THREE.DoubleSide,
+    depthTest: false,
+  });
   const mesh = new THREE.Mesh(new THREE.PlaneGeometry(1, 1), mat);
   mesh.renderOrder = 20 + item.order;
   mesh.visible = false;
-  loadTex(url).then((t) => {
-    mat.map = t;
-    mat.needsUpdate = true;
-    const img = t.image as { width: number; height: number };
-    onAspect(img.height / Math.max(1, img.width));
-    mesh.visible = true;
-    onReady();
-  }, () => undefined);
+  loadTex(url).then(
+    (t) => {
+      mat.map = t;
+      mat.needsUpdate = true;
+      const img = t.image as { width: number; height: number };
+      onAspect(img.height / Math.max(1, img.width));
+      mesh.visible = true;
+      onReady();
+    },
+    () => {
+      onReady();
+    },
+  );
   return mesh;
 }
 
 /** BJP Look: configurable items on head (face 6DoF), shoulders (body pose) and screen frame layer. */
-export function lookRuntime(layers: SceneLayers, ctx: SceneContext): SceneRuntime & { backgroundUrl?: string | undefined } {
+export function lookRuntime(
+  layers: SceneLayers,
+  ctx: SceneContext,
+): SceneRuntime & { backgroundUrl?: string | undefined } {
   addLights(layers.front);
   // Only the exact uploaded artwork that an admin approved is rendered. No built-in/substitute symbols.
-  const items = [...ctx.config.bjp].filter((b) => b.enabled && b.approved && b.asset).sort((a, b) => a.order - b.order);
+  const items = [...ctx.config.bjp]
+    .filter((b) => b.enabled && b.approved && b.asset)
+    .sort((a, b) => a.order - b.order);
 
   const headAnchor = new THREE.Group();
   headAnchor.matrixAutoUpdate = false;
@@ -208,28 +296,52 @@ export function lookRuntime(layers: SceneLayers, ctx: SceneContext): SceneRuntim
     if (!it.asset) continue;
     if (it.anchor === "background") {
       // Preflight background too; capture remains disabled until the asset loads.
-      loadTex(it.asset).then((t) => { loaded++; t.dispose(); }, noop);
+      loadTex(it.asset).then((t) => {
+        loaded++;
+        t.dispose();
+      }, noop);
       backgroundUrl = it.asset;
       continue;
     }
     const rot = THREE.MathUtils.degToRad(it.rotation);
     if (it.anchor === "head") {
       const w = 20 * (it.scale || 1);
-      const m = imagePlane(it.asset, it, (a) => m.scale.set(w, w * a, 1), () => { loaded++; });
+      const m = imagePlane(
+        it.asset,
+        it,
+        (a) => m.scale.set(w, w * a, 1),
+        () => {
+          loaded++;
+        },
+      );
       m.position.set(it.offsetX, 9 + it.offsetY, 4);
       m.rotation.z = rot;
       headAnchor.add(m);
       mirrorables.push(m);
     } else if (it.anchor === "shoulders") {
       const w = it.scale || 1;
-      const m = imagePlane(it.asset, it, (a) => m.scale.set(w, w * a, 1), () => { loaded++; });
+      const m = imagePlane(
+        it.asset,
+        it,
+        (a) => m.scale.set(w, w * a, 1),
+        () => {
+          loaded++;
+        },
+      );
       m.position.set(it.offsetX / 100, -0.25 + it.offsetY / 100, 0.25);
       m.rotation.z = rot;
       shoulderAnchor.add(m);
       mirrorables.push(m);
     } else {
       const entry = { mesh: null as unknown as THREE.Mesh, item: it, aspect: 1 };
-      entry.mesh = imagePlane(it.asset, it, (a) => (entry.aspect = a), () => { loaded++; });
+      entry.mesh = imagePlane(
+        it.asset,
+        it,
+        (a) => (entry.aspect = a),
+        () => {
+          loaded++;
+        },
+      );
       entry.mesh.rotation.z = rot;
       screenAnchor.add(entry.mesh);
       screenItems.push(entry);
@@ -241,7 +353,9 @@ export function lookRuntime(layers: SceneLayers, ctx: SceneContext): SceneRuntim
   let lostS = 0;
   return {
     backgroundUrl,
-    get standIn() { return items.length === 0 || loaded < items.length; },
+    get standIn() {
+      return items.length > 0 && loaded < items.length;
+    },
     reset() {
       headAnchor.visible = false;
       shoulderAnchor.visible = false;
@@ -262,7 +376,8 @@ export function lookRuntime(layers: SceneLayers, ctx: SceneContext): SceneRuntim
         const w = left.distanceTo(right);
         shoulderAnchor.position.lerp(mid, shoulderAnchor.visible ? Math.min(1, t.dt * 12) : 1);
         shoulderAnchor.scale.setScalar(w);
-        shoulderAnchor.rotation.z = Math.atan2(right.y - left.y, right.x - left.x) + (right.x < left.x ? Math.PI : 0);
+        shoulderAnchor.rotation.z =
+          Math.atan2(right.y - left.y, right.x - left.x) + (right.x < left.x ? Math.PI : 0);
         shoulderAnchor.visible = true;
         lostS = 0;
       } else if ((lostS += t.dt) > 0.4) shoulderAnchor.visible = false;
@@ -307,7 +422,14 @@ export function worldCompanion(ctx: SceneContext, ch: PubChar) {
   holder.position.y = (FIG_H - HEAD_FROM_TOP) * 0.01 * (ch.scale || 1);
   g.add(holder);
   if (hasAuthorizedAsset(ch)) {
-    const a = authorizedContent(ch, (o) => { holder.clear(); holder.add(o); }, noop);
+    const a = authorizedContent(
+      ch,
+      (o) => {
+        holder.clear();
+        holder.add(o);
+      },
+      noop,
+    );
     a.setInteraction(ctx.interaction);
     disc.onBeforeRender = () => a.tick(1 / 60);
   }

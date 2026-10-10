@@ -15,7 +15,9 @@ export function DebugPanel({ rows, title = "AR DEBUG" }: { rows: DebugRow[]; tit
         <div key={r.label} className="flex items-center justify-between gap-2">
           <span className="text-muted-foreground">{r.label}</span>
           <span className="flex items-center gap-1.5 text-right">
-            {r.state && <span className={`inline-block h-1.5 w-1.5 rounded-full ${dot[r.state]}`} />}
+            {r.state && (
+              <span className={`inline-block h-1.5 w-1.5 rounded-full ${dot[r.state]}`} />
+            )}
             {r.value}
           </span>
         </div>
@@ -38,15 +40,16 @@ export function deviceLabel(): string {
           : /Linux/.test(ua)
             ? "Linux"
             : "Other";
-  const br = /CriOS|Chrome/.test(ua) && !/Edg/.test(ua)
-    ? "Chrome"
-    : /Edg/.test(ua)
-      ? "Edge"
-      : /Firefox|FxiOS/.test(ua)
-        ? "Firefox"
-        : /Safari/.test(ua)
-          ? "Safari"
-          : "Browser";
+  const br =
+    /CriOS|Chrome/.test(ua) && !/Edg/.test(ua)
+      ? "Chrome"
+      : /Edg/.test(ua)
+        ? "Edge"
+        : /Firefox|FxiOS/.test(ua)
+          ? "Firefox"
+          : /Safari/.test(ua)
+            ? "Safari"
+            : "Browser";
   const touch = navigator.maxTouchPoints > 0 ? "touch" : "no-touch";
   return `${os} · ${br} · ${touch}`;
 }

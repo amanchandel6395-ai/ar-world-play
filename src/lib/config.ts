@@ -1,6 +1,15 @@
 /** Shared (browser-safe) app configuration types + defaults. Internal prompts are NOT part of the public config. */
 
-export const INTERACTIONS = ["selfie", "namaste", "handshake", "hug", "walk", "meeting", "event"] as const;
+export const INTERACTIONS = [
+  "selfie",
+  "namaste",
+  "handshake",
+  "hug",
+  "walk",
+  "meeting",
+  "scarf",
+  "event",
+] as const;
 export type InteractionId = (typeof INTERACTIONS)[number];
 export type CharacterId = "yogi" | "modi";
 export type Bilingual = { en: string; hi: string };
@@ -27,7 +36,8 @@ export type Character = {
   rotationY: number;
 };
 
-export type BjpKind = "cap" | "scarf" | "flag" | "lotus" | "art" | "background" | "frame" | "sticker";
+export type BjpKind =
+  "cap" | "scarf" | "flag" | "lotus" | "art" | "background" | "frame" | "sticker";
 export type BjpAnchor = "head" | "shoulders" | "screen" | "background";
 export type BjpItem = {
   id: string;
@@ -111,7 +121,13 @@ const char = (en: string, hi: string): Character => ({
   rotationY: 0,
 });
 
-const ix = (id: InteractionId, icon: string, en: string, hi: string, action: string): Interaction => ({
+const ix = (
+  id: InteractionId,
+  icon: string,
+  en: string,
+  hi: string,
+  action: string,
+): Interaction => ({
   id,
   enabled: true,
   icon,
@@ -122,7 +138,10 @@ const ix = (id: InteractionId, icon: string, en: string, hi: string, action: str
 });
 
 export const DEFAULT_CONFIG: AppConfig = {
-  characters: { yogi: char("CM Yogi Adityanath", "मुख्यमंत्री योगी आदित्यनाथ"), modi: char("PM Narendra Modi", "प्रधानमंत्री नरेंद्र मोदी") },
+  characters: {
+    yogi: char("CM Yogi Adityanath", "मुख्यमंत्री योगी आदित्यनाथ"),
+    modi: char("PM Narendra Modi", "प्रधानमंत्री नरेंद्र मोदी"),
+  },
   bjp: [],
   interactions: [
     ix("selfie", "🤳", "Selfie", "सेल्फ़ी", "standing side by side taking a selfie"),
@@ -131,7 +150,20 @@ export const DEFAULT_CONFIG: AppConfig = {
     ix("hug", "🫂", "Hug", "गले मिलना", "sharing a respectful friendly hug"),
     ix("walk", "🚶", "Walk", "साथ चलना", "walking together side by side"),
     ix("meeting", "💬", "Meeting", "मुलाक़ात", "seated in a friendly formal meeting"),
-    ix("event", "🎉", "Event", "कार्यक्रम", "on stage at a public event with a festive crowd behind"),
+    ix(
+      "scarf",
+      "🧣",
+      "Scarf Presentation",
+      "अंगवस्त्र भेंट",
+      "ceremonially presenting and draping a traditional saffron scarf",
+    ),
+    ix(
+      "event",
+      "🎉",
+      "Event",
+      "कार्यक्रम",
+      "on stage at a public event with a festive crowd behind",
+    ),
   ],
   demo: { enabled: true },
   ai: {
@@ -157,17 +189,36 @@ export function mergeConfig(stored: unknown): AppConfig {
   const d = DEFAULT_CONFIG;
   return {
     characters: {
-      yogi: { ...d.characters.yogi, ...(s.characters?.yogi ?? {}), approvedAssets: s.characters?.yogi?.approvedAssets ?? {} },
-      modi: { ...d.characters.modi, ...(s.characters?.modi ?? {}), approvedAssets: s.characters?.modi?.approvedAssets ?? {} },
+      yogi: {
+        ...d.characters.yogi,
+        ...(s.characters?.yogi ?? {}),
+        approvedAssets: s.characters?.yogi?.approvedAssets ?? {},
+      },
+      modi: {
+        ...d.characters.modi,
+        ...(s.characters?.modi ?? {}),
+        approvedAssets: s.characters?.modi?.approvedAssets ?? {},
+      },
     },
     // Built-in stand-in items are retired; only uploaded artwork can be used.
     bjp: (Array.isArray(s.bjp) ? s.bjp : d.bjp)
       .filter((b) => b && !String(b.id).startsWith("builtin"))
-      .map((b) => ({ ...b, approvedAt: b.approvedAt ?? null, permissionNote: b.permissionNote ?? "" })),
-    interactions: d.interactions.map((di) => ({ ...di, ...(s.interactions?.find((x) => x.id === di.id) ?? {}) })),
+      .map((b) => ({
+        ...b,
+        approvedAt: b.approvedAt ?? null,
+        permissionNote: b.permissionNote ?? "",
+      })),
+    interactions: d.interactions.map((di) => ({
+      ...di,
+      ...(s.interactions?.find((x) => x.id === di.id) ?? {}),
+    })),
     demo: { enabled: typeof s.demo?.enabled === "boolean" ? s.demo.enabled : d.demo.enabled },
     ai: { ...d.ai, ...(s.ai ?? {}) },
-    brand: { ...d.brand, ...(s.brand ?? {}), tagline: { ...d.brand.tagline, ...(s.brand?.tagline ?? {}) } },
+    brand: {
+      ...d.brand,
+      ...(s.brand ?? {}),
+      tagline: { ...d.brand.tagline, ...(s.brand?.tagline ?? {}) },
+    },
   };
 }
 
@@ -187,7 +238,12 @@ export function toPublicDefault(): PublicConfig {
 
 /** Only explicitly approved flat cutouts are customer-ready; models and references never count. */
 export const characterReady = (c: Character) =>
-  c.enabled && c.authorized && !!c.authorizedAt && !!c.permissionNote.trim() && Object.values(c.poses).some((p) => p && c.approvedAssets[p]);
+  c.enabled &&
+  c.authorized &&
+  !!c.authorizedAt &&
+  !!c.permissionNote.trim() &&
+  Object.values(c.poses).some((p) => p && c.approvedAssets[p]);
 
 /** BJP artwork is usable only when uploaded, approved and enabled. */
-export const bjpUsable = (b: BjpItem) => !!b.asset && b.approved && !!b.approvedAt && !!b.permissionNote.trim() && b.enabled;
+export const bjpUsable = (b: BjpItem) =>
+  !!b.asset && b.approved && !!b.approvedAt && !!b.permissionNote.trim() && b.enabled;

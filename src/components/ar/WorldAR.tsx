@@ -62,7 +62,13 @@ export function WorldAR({
       const xr = (navigator as any).xr;
       const session = await xr.requestSession("immersive-ar", {
         requiredFeatures: ["hit-test"],
-        optionalFeatures: ["dom-overlay", "anchors", "plane-detection", "depth-sensing", "local-floor"],
+        optionalFeatures: [
+          "dom-overlay",
+          "anchors",
+          "plane-detection",
+          "depth-sensing",
+          "local-floor",
+        ],
         domOverlay: { root: overlayRef.current },
         depthSensing: {
           usagePreference: ["cpu-optimized", "gpu-optimized"],
@@ -74,7 +80,11 @@ export function WorldAR({
       state.depth = session.depthUsage ? `ON (${session.depthUsage})` : "not granted";
       push();
 
-      const renderer = new THREE.WebGLRenderer({ canvas: canvasRef.current!, alpha: true, antialias: true });
+      const renderer = new THREE.WebGLRenderer({
+        canvas: canvasRef.current!,
+        alpha: true,
+        antialias: true,
+      });
       renderer.setPixelRatio(window.devicePixelRatio);
       renderer.xr.enabled = true;
       renderer.xr.setReferenceSpaceType("local");
@@ -209,11 +219,19 @@ export function WorldAR({
   const on = (b: boolean) => (b ? "on" : "off") as "on" | "off";
   const rows: DebugRow[] = [
     { label: "AR ENGINE", value: dbg.session ? "ON · WebXR" : "OFF", state: on(dbg.session) },
-    { label: "WEBXR AR", value: dbg.supported.toUpperCase(), state: dbg.supported === "yes" ? "on" : dbg.supported === "no" ? "off" : "warn" },
+    {
+      label: "WEBXR AR",
+      value: dbg.supported.toUpperCase(),
+      state: dbg.supported === "yes" ? "on" : dbg.supported === "no" ? "off" : "warn",
+    },
     { label: "CAMERA", value: dbg.session ? "ON" : "OFF", state: on(dbg.session) },
     { label: "FACING", value: "BACK (environment)", state: "info" },
     { label: "WORLD TRACKING", value: dbg.tracking ? "ON · 6DoF" : "OFF", state: on(dbg.tracking) },
-    { label: "HIT TEST", value: dbg.hit ? "surface found" : "searching", state: dbg.hit ? "on" : "warn" },
+    {
+      label: "HIT TEST",
+      value: dbg.hit ? "surface found" : "searching",
+      state: dbg.hit ? "on" : "warn",
+    },
     { label: "ANCHORS", value: dbg.anchors },
     { label: "PLANES", value: dbg.planes },
     { label: "DEPTH", value: dbg.depth },
@@ -227,7 +245,10 @@ export function WorldAR({
   return (
     <div className="relative min-h-dvh w-full bg-background grid-bg">
       <canvas ref={canvasRef} className="fixed inset-0 h-full w-full" />
-      <div ref={overlayRef} className="pointer-events-none relative z-10 flex min-h-dvh flex-col justify-between p-3">
+      <div
+        ref={overlayRef}
+        className="pointer-events-none relative z-10 flex min-h-dvh flex-col justify-between p-3"
+      >
         <div className="flex items-start justify-between gap-2">
           {showDebug ? <DebugPanel rows={rows} title="WORLD AR DEBUG" /> : <span />}
           <div className="pointer-events-auto flex flex-col gap-2">
@@ -238,16 +259,20 @@ export function WorldAR({
               >
                 exit AR
               </button>
+            ) : onExit ? (
+              <button
+                onClick={onExit}
+                className="rounded-full border border-border bg-overlay px-5 py-3 text-sm font-semibold text-foreground"
+              >
+                ← Back
+              </button>
             ) : (
-              onExit ? (
-                <button onClick={onExit} className="rounded-full border border-border bg-overlay px-5 py-3 text-sm font-semibold text-foreground">
-                  ← Back
-                </button>
-              ) : (
-                <a href="/" className="rounded-md border border-border bg-overlay px-3 py-1.5 font-mono text-xs text-foreground">
-                  ← back
-                </a>
-              )
+              <a
+                href="/"
+                className="rounded-md border border-border bg-overlay px-3 py-1.5 font-mono text-xs text-foreground"
+              >
+                ← back
+              </a>
             )}
           </div>
         </div>
@@ -262,22 +287,28 @@ export function WorldAR({
             {dbg.supported === "yes" && (
               <>
                 <p className="mb-3 text-muted-foreground">
-                  Point the back camera at the floor, move slowly until the green ring appears, then tap to place the
-                  test subject. Walk toward / around it — it stays fixed in the room.
+                  Point the back camera at the floor, move slowly until the green ring appears, then
+                  tap to place the test subject. Walk toward / around it — it stays fixed in the
+                  room.
                 </p>
-                <button onClick={start} className="w-full rounded-md bg-primary py-2.5 font-semibold text-primary-foreground">
+                <button
+                  onClick={start}
+                  className="w-full rounded-md bg-primary py-2.5 font-semibold text-primary-foreground"
+                >
                   START WORLD AR
                 </button>
               </>
             )}
             {dbg.supported === "no" && (
               <p className="text-warning">
-                This browser does not support WebXR immersive-ar, so real world tracking cannot run here. Supported:
-                Android Chrome on ARCore devices. Not supported: iPhone/iPad Safari, desktop browsers. No fallback is
-                faked.
+                This browser does not support WebXR immersive-ar, so real world tracking cannot run
+                here. Supported: Android Chrome on ARCore devices. Not supported: iPhone/iPad
+                Safari, desktop browsers. No fallback is faked.
               </p>
             )}
-            {dbg.supported === "checking" && <p className="text-muted-foreground">checking WebXR support…</p>}
+            {dbg.supported === "checking" && (
+              <p className="text-muted-foreground">checking WebXR support…</p>
+            )}
             {dbg.error && <p className="mt-3 text-destructive">{dbg.error}</p>}
           </div>
         )}

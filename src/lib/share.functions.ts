@@ -21,7 +21,9 @@ export const createShare = createServerFn({ method: "POST" })
     crypto.getRandomValues(rand);
     const token = Array.from(rand, (b) => b.toString(16).padStart(2, "0")).join("");
     const path = `${new Date().toISOString().slice(0, 10)}/${token}.jpg`;
-    const up = await supabaseAdmin.storage.from("captures").upload(path, bytes, { contentType: "image/jpeg" });
+    const up = await supabaseAdmin.storage
+      .from("captures")
+      .upload(path, bytes, { contentType: "image/jpeg" });
     if (up.error) throw new Error("Could not store photo");
     const expires = new Date(Date.now() + SHARE_TTL_HOURS * 3600_000).toISOString();
     const ins = await supabaseAdmin
@@ -40,9 +42,12 @@ export const getShare = createServerFn({ method: "GET" })
       .select("path, kind, ai_generated, expires_at")
       .eq("token", data.token)
       .maybeSingle();
-    if (!row || new Date(row.expires_at).getTime() < Date.now()) return { status: "expired" as const };
+    if (!row || new Date(row.expires_at).getTime() < Date.now())
+      return { status: "expired" as const };
     const signed = await supabaseAdmin.storage.from("captures").createSignedUrl(row.path, 3600);
-    const dl = await supabaseAdmin.storage.from("captures").createSignedUrl(row.path, 3600, { download: "zuitar-photo.jpg" });
+    const dl = await supabaseAdmin.storage
+      .from("captures")
+      .createSignedUrl(row.path, 3600, { download: "zuitar-photo.jpg" });
     if (!signed.data || !dl.data) return { status: "expired" as const };
     return {
       status: "ok" as const,

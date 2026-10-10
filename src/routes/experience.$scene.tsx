@@ -9,7 +9,9 @@ export const Route = createFileRoute("/experience/$scene")({
     if (!isSceneId(params.scene)) throw notFound();
   },
   head: ({ params }) => {
-    const s = isSceneId(params.scene) ? { title: DICTS.en[params.scene], subtitle: DICTS.en[`${params.scene}Sub`] } : null;
+    const s = isSceneId(params.scene)
+      ? { title: DICTS.en[params.scene], subtitle: DICTS.en[`${params.scene}Sub`] }
+      : null;
     const title = s ? `${s.title} · ZUITAR` : "ZUITAR";
     const desc = s ? `${s.subtitle} — live AR camera by ZUITAR.` : "ZUITAR live AR camera.";
     return {

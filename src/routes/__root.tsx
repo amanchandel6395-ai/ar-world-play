@@ -78,11 +78,19 @@ export const Route = createRootRouteWithContext<{ queryClient: QueryClient }>()(
     meta: [
       { charSet: "utf-8" },
       { name: "viewport", content: "width=device-width, initial-scale=1" },
-      { title: "ZUITAR" },
-      { name: "description", content: "ZUITAR AI camera and AR experiences." },
+      { title: "ZUITAR - AR World Play" },
+      {
+        name: "description",
+        content:
+          "ZUITAR AI camera and AR experiences with real-time tracking, stage lighting, and custom standees.",
+      },
       { name: "author", content: "Lovable" },
-      { property: "og:title", content: "ZUITAR" },
-      { property: "og:description", content: "ZUITAR AI camera and AR experiences." },
+      { property: "og:title", content: "ZUITAR - AR World Play" },
+      {
+        property: "og:description",
+        content:
+          "ZUITAR AI camera and AR experiences with real-time tracking, stage lighting, and custom standees.",
+      },
       { property: "og:type", content: "website" },
       { name: "twitter:card", content: "summary_large_image" },
       { name: "twitter:site", content: "@Lovable" },
@@ -93,7 +101,10 @@ export const Route = createRootRouteWithContext<{ queryClient: QueryClient }>()(
         href: appCss,
       },
       { rel: "preconnect", href: "https://fonts.googleapis.com" },
-      { rel: "stylesheet", href: "https://fonts.googleapis.com/css2?family=JetBrains+Mono:wght@400;600&family=Space+Grotesk:wght@400;600;700&family=Noto+Sans+Devanagari:wght@400;600;700&display=swap" },
+      {
+        rel: "stylesheet",
+        href: "https://fonts.googleapis.com/css2?family=JetBrains+Mono:wght@400;600&family=Space+Grotesk:wght@400;600;700&family=Noto+Sans+Devanagari:wght@400;600;700&display=swap",
+      },
       { rel: "icon", href: "/favicon.ico", type: "image/x-icon" },
     ],
   }),

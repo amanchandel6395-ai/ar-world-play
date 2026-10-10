@@ -128,11 +128,21 @@
     background-size: 48px 48px;
     background-position: -1px -1px;
   }
-  .mirror-x { transform: scaleX(-1); }
+  .mirror-x {
+    transform: scaleX(-1);
+  }
   .bg-stage {
     background:
-      radial-gradient(60rem 40rem at 15% -10%, color-mix(in oklch, var(--saffron) 28%, transparent), transparent 60%),
-      radial-gradient(50rem 40rem at 110% 110%, color-mix(in oklch, var(--leaf) 22%, transparent), transparent 60%),
+      radial-gradient(
+        60rem 40rem at 15% -10%,
+        color-mix(in oklch, var(--saffron) 28%, transparent),
+        transparent 60%
+      ),
+      radial-gradient(
+        50rem 40rem at 110% 110%,
+        color-mix(in oklch, var(--leaf) 22%, transparent),
+        transparent 60%
+      ),
       var(--background);
   }
   .text-gradient {
@@ -141,23 +151,84 @@
     background-clip: text;
     color: transparent;
   }
-  .zt-btn-primary, .zt-btn-secondary, .zt-btn-ghost {
-    display: inline-flex; align-items: center; justify-content: center;
-    min-height: 3.75rem; padding: 0 1.5rem; border-radius: 9999px;
-    font-size: 1.125rem; font-weight: 600; transition: transform .12s, opacity .12s;
+  .zt-btn-primary,
+  .zt-btn-secondary,
+  .zt-btn-ghost {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    min-height: 3.75rem;
+    padding: 0 1.5rem;
+    border-radius: 9999px;
+    font-size: 1.125rem;
+    font-weight: 600;
+    transition:
+      transform 0.12s,
+      opacity 0.12s;
   }
-  .zt-btn-primary { background: var(--primary); color: var(--primary-foreground); }
-  .zt-btn-secondary { background: var(--secondary); color: var(--foreground); }
-  .zt-btn-ghost { color: var(--foreground); }
-  .zt-btn-primary:active, .zt-btn-secondary:active, .zt-btn-ghost:active, .zt-btn-round:active { transform: scale(0.94); }
-  .zt-btn-primary:disabled, .zt-btn-secondary:disabled { opacity: .5; }
+  .zt-btn-primary {
+    background: var(--primary);
+    color: var(--primary-foreground);
+  }
+  .zt-btn-secondary {
+    background: var(--secondary);
+    color: var(--foreground);
+  }
+  .zt-btn-ghost {
+    color: var(--foreground);
+  }
+  .zt-btn-primary:active,
+  .zt-btn-secondary:active,
+  .zt-btn-ghost:active,
+  .zt-btn-round:active {
+    transform: scale(0.94);
+  }
+  .zt-btn-primary:disabled,
+  .zt-btn-secondary:disabled {
+    opacity: 0.5;
+  }
   .zt-btn-round {
-    display: grid; place-items: center; height: 4rem; min-width: 4rem; padding: 0 .75rem;
-    border-radius: 9999px; background: var(--overlay); border: 1px solid var(--border);
-    font-size: 1.6rem; color: var(--foreground); backdrop-filter: blur(8px); transition: transform .12s;
+    display: grid;
+    place-items: center;
+    height: 4rem;
+    min-width: 4rem;
+    padding: 0 0.75rem;
+    border-radius: 9999px;
+    background: var(--overlay);
+    border: 1px solid var(--border);
+    font-size: 1.6rem;
+    color: var(--foreground);
+    backdrop-filter: blur(8px);
+    transition: transform 0.12s;
   }
-  .zt-card { animation: zt-rise .5s cubic-bezier(.2,.8,.2,1) both; }
-  .zt-count { animation: zt-pop 1s ease-out both; }
+  .zt-card {
+    animation: zt-rise 0.5s cubic-bezier(0.2, 0.8, 0.2, 1) both;
+  }
+  .zt-count {
+    animation: zt-pop 1s ease-out both;
+  }
 }
-@keyframes zt-rise { from { opacity: 0; transform: translateY(16px); } to { opacity: 1; transform: none; } }
-@keyframes zt-pop { 0% { opacity: 0; transform: scale(1.6); } 25% { opacity: 1; transform: scale(1); } 100% { opacity: 0.2; transform: scale(0.9); } }
+@keyframes zt-rise {
+  from {
+    opacity: 0;
+    transform: translateY(16px);
+  }
+  to {
+    opacity: 1;
+    transform: none;
+  }
+}
+@keyframes zt-pop {
+  0% {
+    opacity: 0;
+    transform: scale(1.6);
+  }
+  25% {
+    opacity: 1;
+    transform: scale(1);
+  }
+  100% {
+    opacity: 0.2;
+    transform: scale(0.9);
+  }
+}

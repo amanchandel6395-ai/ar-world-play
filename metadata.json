@@ -1,0 +1,6 @@
+{
+  "name": "ZUITAR - AR World Play",
+  "description": "ZUITAR AI camera and AR experiences with real-time tracking, stage lighting, and custom standees.",
+  "permissions": [],
+  "capabilities": ["MAJOR_CAPABILITY_SERVER_SIDE_GEMINI_API"]
+}

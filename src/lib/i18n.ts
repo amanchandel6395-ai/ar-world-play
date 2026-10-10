@@ -180,7 +180,8 @@ const hi: Dict = {
   expires: "लिंक 24 घंटे चलेगा",
   qrFail: "QR कोड नहीं बना। डाउनलोड का उपयोग करें।",
   creating: "बन रहा है…",
-  worldUnsupported: "कमरे वाले AR के लिए ARCore वाला Android Chrome चाहिए। सामान्य कैमरा इस्तेमाल करें।",
+  worldUnsupported:
+    "कमरे वाले AR के लिए ARCore वाला Android Chrome चाहिए। सामान्य कैमरा इस्तेमाल करें।",
   moveSlow: "कैमरा धीरे-धीरे घुमाएँ",
   pointFloor: "फ़र्श की ओर रखें",
   tapPlace: "रखने के लिए टैप करें",

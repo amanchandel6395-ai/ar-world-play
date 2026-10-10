@@ -47,7 +47,8 @@ export function Experience({ sceneId }: { sceneId: SceneId }) {
       .then((c) => {
         setConfig(c);
         const first = c.interactions.find((i) => i.enabled);
-        if (first && !c.interactions.some((i) => i.enabled && i.id === interactionRef.current)) setInteraction(first.id);
+        if (first && !c.interactions.some((i) => i.enabled && i.id === interactionRef.current))
+          setInteraction(first.id);
       })
       .catch(() => setConfigError(true));
   }, [fetchConfig]);
@@ -89,7 +90,11 @@ export function Experience({ sceneId }: { sceneId: SceneId }) {
         if (cancelled) return;
         const name = e instanceof Error ? e.name : "";
         setError(
-          name === "NotAllowedError" ? t.errCamDenied : name === "NotFoundError" || name === "OverconstrainedError" ? t.errCamMissing : t.errCam,
+          name === "NotAllowedError"
+            ? t.errCamDenied
+            : name === "NotFoundError" || name === "OverconstrainedError"
+              ? t.errCamMissing
+              : t.errCam,
         );
       });
     return () => {
@@ -107,7 +112,13 @@ export function Experience({ sceneId }: { sceneId: SceneId }) {
   };
 
   const capture = () => {
-    if (count > 0 || !engine.current || engine.current.standIn || !config?.ready[sceneId]) return;
+    if (
+      count > 0 ||
+      !engine.current ||
+      (engine.current.standIn && !dev) ||
+      (!config?.ready[sceneId] && !dev)
+    )
+      return;
     let n = scene.capture.countdown;
     setCount(n);
     const tick = () => {
@@ -117,7 +128,7 @@ export function Experience({ sceneId }: { sceneId: SceneId }) {
         window.setTimeout(tick, 1000);
       } else {
         setCount(0);
-        if (!engine.current || engine.current.standIn) return;
+        if (!engine.current || (engine.current.standIn && !dev)) return;
         engine.current
           ?.capture()
           .then((b) => {
@@ -159,7 +170,7 @@ export function Experience({ sceneId }: { sceneId: SceneId }) {
         photo={photo}
         sceneId={sceneId}
         interaction={interaction}
-        allowAi={sceneId === "bjp" && !!config?.ai.imageReady}
+        allowAi={!!config?.ai.imageReady || !!config?.ai.imageEnabled}
         allowVideo={sceneId === "bjp" && !!config?.ai.videoReady}
         videoConfigured={sceneId === "bjp" && !!config?.ai.videoEnabled}
         onRetake={() => {
@@ -174,19 +185,39 @@ export function Experience({ sceneId }: { sceneId: SceneId }) {
   const title = t[sceneId];
   const subtitle = t[`${sceneId}Sub`];
   const ready = status?.engine && !error;
-  const sceneReady = !!config?.ready[sceneId];
-  const assetMissing = !sceneReady || (!!ready && !!engine.current?.standIn);
+  const sceneReady = !!config?.ready[sceneId] || dev;
+  const assetMissing = !sceneReady || (!!ready && !!engine.current?.standIn && !dev);
   const interactions = config?.interactions.filter((i) => i.enabled) ?? [];
   const on = (b?: boolean) => (b ? "on" : "off") as "on" | "off";
   const rows: DebugRow[] = status
     ? [
-        { label: "AR ENGINE", value: status.engine ? "ON · MediaPipe" : "loading", state: on(status.engine) },
+        {
+          label: "AR ENGINE",
+          value: status.engine ? "ON · MediaPipe" : "loading",
+          state: on(status.engine),
+        },
         { label: "CAMERA", value: status.camera ? "ON" : "OFF", state: on(status.camera) },
         { label: "FACING", value: status.facing === "user" ? "FRONT" : "BACK", state: "info" },
-        { label: "FACE TRACKING", value: status.face ? "ON · 6DoF" : "no face", state: on(status.face) },
-        { label: "BODY TRACKING", value: status.body ? "ON · pose" : "no body", state: on(status.body) },
-        { label: "SEGMENTATION", value: status.segmentation ? "ON" : "OFF", state: on(status.segmentation) },
-        { label: "WORLD TRACKING", value: caps?.worldAR ? "available (room mode)" : "not supported", state: caps?.worldAR ? "info" : "warn" },
+        {
+          label: "FACE TRACKING",
+          value: status.face ? "ON · 6DoF" : "no face",
+          state: on(status.face),
+        },
+        {
+          label: "BODY TRACKING",
+          value: status.body ? "ON · pose" : "no body",
+          state: on(status.body),
+        },
+        {
+          label: "SEGMENTATION",
+          value: status.segmentation ? "ON" : "OFF",
+          state: on(status.segmentation),
+        },
+        {
+          label: "WORLD TRACKING",
+          value: caps?.worldAR ? "available (room mode)" : "not supported",
+          state: caps?.worldAR ? "info" : "warn",
+        },
         { label: "BODY STATE", value: status.bodyState },
         { label: "DISTANCE", value: status.distance },
         { label: "FPS", value: String(status.fps) },
@@ -201,9 +232,7 @@ export function Experience({ sceneId }: { sceneId: SceneId }) {
   return (
     <div className="relative h-dvh w-full overflow-hidden bg-background">
       <video ref={videoRef} className="hidden" playsInline muted />
-      {phase === "live" && (
-        <canvas ref={canvasRef} className="h-full w-full object-cover" />
-      )}
+      {phase === "live" && <canvas ref={canvasRef} className="h-full w-full object-cover" />}
 
       {phase === "intro" && (
         <div className="absolute inset-0 flex flex-col items-center justify-center gap-8 bg-stage px-6 text-center">
@@ -238,12 +267,21 @@ export function Experience({ sceneId }: { sceneId: SceneId }) {
               </button>
             </div>
           ) : config && !sceneReady ? (
-            <div role="status" className="flex max-w-md flex-col items-center gap-2 rounded-2xl border border-warning/60 bg-card px-6 py-5">
+            <div
+              role="status"
+              className="flex max-w-md flex-col items-center gap-2 rounded-2xl border border-warning/60 bg-card px-6 py-5"
+            >
               <p className="text-xl font-bold text-warning">{t.setupTitle}</p>
-              <p className="text-muted-foreground">{sceneId === "bjp" ? t.setupBjp : t.setupChar}</p>
+              <p className="text-muted-foreground">
+                {sceneId === "bjp" ? t.setupBjp : t.setupChar}
+              </p>
             </div>
           ) : (
-            <button onClick={() => setPhase("live")} disabled={!config} className="zt-btn-primary min-w-64 text-xl disabled:opacity-50">
+            <button
+              onClick={() => setPhase("live")}
+              disabled={!config}
+              className="zt-btn-primary min-w-64 text-xl disabled:opacity-50"
+            >
               {config ? t.startCamera : t.loading}
             </button>
           )}
@@ -270,7 +308,13 @@ export function Experience({ sceneId }: { sceneId: SceneId }) {
             <div className="absolute inset-0 flex flex-col items-center justify-center gap-6 bg-stage px-6 text-center">
               <p className="max-w-md text-xl">{error}</p>
               <div className="flex gap-3">
-                <button onClick={() => { setError(null); setPhase("intro"); }} className="zt-btn-secondary">
+                <button
+                  onClick={() => {
+                    setError(null);
+                    setPhase("intro");
+                  }}
+                  className="zt-btn-secondary"
+                >
                   {t.retry}
                 </button>
                 <button onClick={goHome} className="zt-btn-primary">
@@ -286,7 +330,10 @@ export function Experience({ sceneId }: { sceneId: SceneId }) {
               ←
             </button>
             {ready && assetMissing ? (
-              <div role="status" className="pointer-events-none mt-1 max-w-[55%] rounded-2xl border border-warning/60 bg-overlay px-3 py-1.5 text-center text-xs font-semibold text-warning md:text-sm">
+              <div
+                role="status"
+                className="pointer-events-none mt-1 max-w-[55%] rounded-2xl border border-warning/60 bg-overlay px-3 py-1.5 text-center text-xs font-semibold text-warning md:text-sm"
+              >
                 {t.setupTitle}
               </div>
             ) : ready && sceneId !== "bjp" ? (
@@ -295,22 +342,41 @@ export function Experience({ sceneId }: { sceneId: SceneId }) {
               </div>
             ) : null}
             <div className="flex flex-wrap justify-end gap-2">
-              <button onClick={() => setLang(lang === "en" ? "hi" : "en")} className="zt-btn-round text-xs">
+              <button
+                onClick={() => setLang(lang === "en" ? "hi" : "en")}
+                className="zt-btn-round text-xs"
+              >
                 {lang === "en" ? "हिं" : "EN"}
               </button>
               <button onClick={() => setHelp(true)} aria-label={t.help} className="zt-btn-round">
                 ?
               </button>
-              <button onClick={() => engine.current?.resetPlacement()} disabled={!ready} aria-label={t.reset} className="zt-btn-round text-xs disabled:opacity-40">
+              <button
+                onClick={() => engine.current?.resetPlacement()}
+                disabled={!ready}
+                aria-label={t.reset}
+                className="zt-btn-round text-xs disabled:opacity-40"
+              >
                 ↺
               </button>
               {torchOk && (
-                <button onClick={toggleTorch} aria-label={t.flash} aria-pressed={torch} className={`zt-btn-round ${torch ? "ring-2 ring-primary" : ""}`}>
+                <button
+                  onClick={toggleTorch}
+                  aria-label={t.flash}
+                  aria-pressed={torch}
+                  className={`zt-btn-round ${torch ? "ring-2 ring-primary" : ""}`}
+                >
                   ⚡
                 </button>
               )}
               {scene.occlusion === "segmentation" && (
-                <button onClick={toggleSeg} disabled={!ready} aria-pressed={seg} aria-label="Segmentation" className={`zt-btn-round text-xs disabled:opacity-40 ${seg ? "ring-2 ring-primary" : ""}`}>
+                <button
+                  onClick={toggleSeg}
+                  disabled={!ready}
+                  aria-pressed={seg}
+                  aria-label="Segmentation"
+                  className={`zt-btn-round text-xs disabled:opacity-40 ${seg ? "ring-2 ring-primary" : ""}`}
+                >
                   ◐
                 </button>
               )}
@@ -319,7 +385,10 @@ export function Experience({ sceneId }: { sceneId: SceneId }) {
 
           {count > 0 && (
             <div className="pointer-events-none absolute inset-0 flex items-center justify-center">
-              <span key={count} className="zt-count text-[10rem] font-bold text-foreground drop-shadow-2xl md:text-[14rem]">
+              <span
+                key={count}
+                className="zt-count text-[10rem] font-bold text-foreground drop-shadow-2xl md:text-[14rem]"
+              >
                 {count}
               </span>
             </div>
@@ -342,7 +411,9 @@ export function Experience({ sceneId }: { sceneId: SceneId }) {
                       onClick={() => pick(i.id)}
                       aria-pressed={interaction === i.id}
                       className={`flex shrink-0 items-center gap-1.5 rounded-full border px-4 py-2 text-sm font-semibold ${
-                        interaction === i.id ? "border-primary bg-primary text-primary-foreground" : "border-border bg-overlay text-foreground"
+                        interaction === i.id
+                          ? "border-primary bg-primary text-primary-foreground"
+                          : "border-border bg-overlay text-foreground"
                       }`}
                     >
                       <span>{i.icon}</span>
@@ -363,11 +434,14 @@ export function Experience({ sceneId }: { sceneId: SceneId }) {
                 />
               </div>
               <div className="flex justify-end gap-3">
-                {scene.camera.worldAR && sceneReady && caps?.worldAR && facing === "environment" && (
-                  <button onClick={() => setPhase("world")} className="zt-btn-round text-xs">
-                    {t.room}
-                  </button>
-                )}
+                {scene.camera.worldAR &&
+                  sceneReady &&
+                  caps?.worldAR &&
+                  facing === "environment" && (
+                    <button onClick={() => setPhase("world")} className="zt-btn-round text-xs">
+                      {t.room}
+                    </button>
+                  )}
                 <button onClick={flip} aria-label={t.flip} className="zt-btn-round">
                   ⟲
                 </button>
@@ -376,8 +450,16 @@ export function Experience({ sceneId }: { sceneId: SceneId }) {
           </div>
 
           {help && (
-            <div className="absolute inset-0 flex items-center justify-center bg-background/70 p-6" onClick={() => setHelp(false)}>
-              <div role="dialog" aria-modal="true" className="w-full max-w-sm rounded-2xl bg-card p-6" onClick={(e) => e.stopPropagation()}>
+            <div
+              className="absolute inset-0 flex items-center justify-center bg-background/70 p-6"
+              onClick={() => setHelp(false)}
+            >
+              <div
+                role="dialog"
+                aria-modal="true"
+                className="w-full max-w-sm rounded-2xl bg-card p-6"
+                onClick={(e) => e.stopPropagation()}
+              >
                 <h2 className="mb-3 text-xl font-bold">{t.helpTitle}</h2>
                 <ol className="mb-5 list-decimal space-y-2 pl-5 text-base">
                   <li>{t.help1}</li>

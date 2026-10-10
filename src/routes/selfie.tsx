@@ -6,9 +6,15 @@ export const Route = createFileRoute("/selfie")({
   head: () => ({
     meta: [
       { title: "Selfie AR test · ZUITAR AR PoC" },
-      { name: "description", content: "Front-camera face tracking, segmentation and WebGL AR rendering test." },
+      {
+        name: "description",
+        content: "Front-camera face tracking, segmentation and WebGL AR rendering test.",
+      },
       { property: "og:title", content: "Selfie AR test · ZUITAR AR PoC" },
-      { property: "og:description", content: "Front-camera face tracking, segmentation and WebGL AR rendering test." },
+      {
+        property: "og:description",
+        content: "Front-camera face tracking, segmentation and WebGL AR rendering test.",
+      },
       { property: "og:type", content: "website" },
       { name: "twitter:card", content: "summary" },
     ],

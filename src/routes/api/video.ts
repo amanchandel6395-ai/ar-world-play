@@ -10,7 +10,8 @@ const ID_RE = /^[A-Za-z0-9_-]{6,128}$/;
 async function b64(blob: Blob) {
   const buf = new Uint8Array(await blob.arrayBuffer());
   let s = "";
-  for (let i = 0; i < buf.length; i += 0x8000) s += String.fromCharCode(...buf.subarray(i, i + 0x8000));
+  for (let i = 0; i < buf.length; i += 0x8000)
+    s += String.fromCharCode(...buf.subarray(i, i + 0x8000));
   return btoa(s);
 }
 
@@ -37,14 +38,22 @@ export const Route = createFileRoute("/api/video")({
           !SCENES.includes(scene) ||
           !(INTERACTIONS as readonly string[]).includes(interaction)
         ) {
-          return Response.json({ code: scene === "yogi" || scene === "modi" ? "not_allowed" : "invalid" }, { status: 400 });
+          return Response.json(
+            { code: scene === "yogi" || scene === "modi" ? "not_allowed" : "invalid" },
+            { status: 400 },
+          );
         }
-        const { loadConfig, saveConfig, checkAdmin, presetPrompt, bjpReady } = await import("@/lib/config.server");
+        const { loadConfig, saveConfig, checkAdmin, presetPrompt, bjpReady } =
+          await import("@/lib/config.server");
         const cfg = await loadConfig();
-        if (!cfg.ai.videoEnabled || !bjpReady(cfg)) return Response.json({ code: "not_configured" }, { status: 503 });
+        if (!cfg.ai.videoEnabled || !bjpReady(cfg))
+          return Response.json({ code: "not_configured" }, { status: 503 });
         if (!cfg.ai.videoVerifiedAt) {
-          try { checkAdmin(request.headers.get("X-Booth-Admin") ?? ""); }
-          catch { return Response.json({ code: "not_configured" }, { status: 503 }); }
+          try {
+            checkAdmin(request.headers.get("X-Booth-Admin") ?? "");
+          } catch {
+            return Response.json({ code: "not_configured" }, { status: 503 });
+          }
         }
         const input: unknown[] = [
           { type: "text", text: presetPrompt(cfg, "video") },
@@ -57,7 +66,12 @@ export const Route = createFileRoute("/api/video")({
           body: JSON.stringify({
             model: MODEL,
             input,
-            response_format: { type: "video", resolution: "720p", duration: `${dur}s`, aspect_ratio: "9:16" },
+            response_format: {
+              type: "video",
+              resolution: "720p",
+              duration: `${dur}s`,
+              aspect_ratio: "9:16",
+            },
           }),
         });
         if (!res.ok) {
@@ -78,29 +92,49 @@ export const Route = createFileRoute("/api/video")({
         if (!ID_RE.test(id)) return Response.json({ code: "invalid" }, { status: 400 });
         const { admin, loadConfig, checkAdmin, bjpReady } = await import("@/lib/config.server");
         const cfg = await loadConfig();
-        if (!cfg.ai.videoEnabled || !bjpReady(cfg) || !cfg.ai.videoJobs.includes(id)) return Response.json({ code: "not_configured" }, { status: 503 });
+        if (!cfg.ai.videoEnabled || !bjpReady(cfg) || !cfg.ai.videoJobs.includes(id))
+          return Response.json({ code: "not_configured" }, { status: 503 });
         if (!cfg.ai.videoVerifiedAt) {
-          try { checkAdmin(request.headers.get("X-Booth-Admin") ?? ""); }
-          catch { return Response.json({ code: "not_configured" }, { status: 503 }); }
+          try {
+            checkAdmin(request.headers.get("X-Booth-Admin") ?? "");
+          } catch {
+            return Response.json({ code: "not_configured" }, { status: 503 });
+          }
         }
         const sb = await admin();
         const path = `videos/${id}.mp4`;
         const signed = () => sb.storage.from("captures").createSignedUrl(path, 3600);
         // Idempotent: already stored?
         const existing = await signed();
-        if (existing.data) return Response.json({ status: "completed", url: existing.data.signedUrl, id });
+        if (existing.data)
+          return Response.json({ status: "completed", url: existing.data.signedUrl, id });
 
-        const res = await fetch(`${GATEWAY}/v1/videos/${id}`, { headers: { Authorization: `Bearer ${key}` } });
+        const res = await fetch(`${GATEWAY}/v1/videos/${id}`, {
+          headers: { Authorization: `Bearer ${key}` },
+        });
         if (!res.ok) return Response.json({ code: errCode(res.status) }, { status: res.status });
-        const job = (await res.json()) as { status: string; progress?: number; error?: { code?: string; message?: string } };
+        const job = (await res.json()) as {
+          status: string;
+          progress?: number;
+          error?: { code?: string; message?: string };
+        };
         if (job.status === "failed") {
-          return Response.json({ status: "failed", code: job.error?.code ?? "failed", message: job.error?.message ?? "" });
+          return Response.json({
+            status: "failed",
+            code: job.error?.code ?? "failed",
+            message: job.error?.message ?? "",
+          });
         }
-        if (job.status !== "completed") return Response.json({ status: "in_progress", progress: job.progress ?? null });
-        const content = await fetch(`${GATEWAY}/v1/videos/${id}/content`, { headers: { Authorization: `Bearer ${key}` } });
+        if (job.status !== "completed")
+          return Response.json({ status: "in_progress", progress: job.progress ?? null });
+        const content = await fetch(`${GATEWAY}/v1/videos/${id}/content`, {
+          headers: { Authorization: `Bearer ${key}` },
+        });
         if (!content.ok) return Response.json({ code: "failed" }, { status: 502 });
         const bytes = new Uint8Array(await content.arrayBuffer());
-        const up = await sb.storage.from("captures").upload(path, bytes, { contentType: "video/mp4", upsert: true });
+        const up = await sb.storage
+          .from("captures")
+          .upload(path, bytes, { contentType: "video/mp4", upsert: true });
         if (up.error) return Response.json({ code: "failed" }, { status: 500 });
         const s = await signed();
         return Response.json({ status: "completed", url: s.data?.signedUrl ?? null, id });

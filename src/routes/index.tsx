@@ -11,9 +11,15 @@ export const Route = createFileRoute("/")({
   head: () => ({
     meta: [
       { title: "ZUITAR · AI Camera + AR" },
-      { name: "description", content: "Choose your experience: live AR selfies and styling with ZUITAR." },
+      {
+        name: "description",
+        content: "Choose your experience: live AR selfies and styling with ZUITAR.",
+      },
       { property: "og:title", content: "ZUITAR · AI Camera + AR" },
-      { property: "og:description", content: "Live AR selfies and styling, right in your browser." },
+      {
+        property: "og:description",
+        content: "Live AR selfies and styling, right in your browser.",
+      },
       { property: "og:type", content: "website" },
       { name: "twitter:card", content: "summary_large_image" },
     ],
@@ -40,6 +46,9 @@ function Home() {
   const [showAi, setShowAi] = useState(false);
   const [aiBusy, setAiBusy] = useState(false);
   const [aiError, setAiError] = useState<string | null>(null);
+  const [lastAttempt, setLastAttempt] = useState<{ scene: string; interaction: string } | null>(
+    null,
+  );
   const [cameraError, setCameraError] = useState<string | null>(null);
   const [cameraReady, setCameraReady] = useState(false);
   const [facingMode, setFacingMode] = useState<"user" | "environment">("user");
@@ -51,7 +60,15 @@ function Home() {
   const displayedPhoto = showAi && aiPhoto ? aiPhoto : photo;
 
   useEffect(() => {
-    fetchConfig().then((c) => { setReady(c.ready); setDemoAiReady(c.demo.aiReady); }).catch(() => { setReady(null); setDemoAiReady(false); });
+    fetchConfig()
+      .then((c) => {
+        setReady(c.ready);
+        setDemoAiReady(c.demo.aiReady);
+      })
+      .catch(() => {
+        setReady(null);
+        setDemoAiReady(false);
+      });
     setCanFlipCamera(window.matchMedia("(pointer: coarse)").matches);
   }, [fetchConfig]);
 
@@ -62,11 +79,16 @@ function Home() {
     setCameraError(null);
 
     if (!navigator.mediaDevices?.getUserMedia) {
-      setCameraError(isHindi ? "इस ब्राउज़र में कैमरा उपलब्ध नहीं है।" : "Camera access is not available in this browser.");
+      setCameraError(
+        isHindi
+          ? "इस ब्राउज़र में कैमरा उपलब्ध नहीं है।"
+          : "Camera access is not available in this browser.",
+      );
       return;
     }
 
-    navigator.mediaDevices.getUserMedia({ video: { facingMode }, audio: false })
+    navigator.mediaDevices
+      .getUserMedia({ video: { facingMode }, audio: false })
       .then((stream) => {
         if (!active) {
           stream.getTracks().forEach((track) => track.stop());
@@ -109,7 +131,11 @@ function Home() {
     context.fillStyle = "#fbbf24";
     context.font = `600 ${Math.max(16, Math.round(canvas.width * 0.035))}px sans-serif`;
     context.textBaseline = "middle";
-    context.fillText("ZUITAR · PHOTO BOOTH DEMO", Math.round(canvas.width * 0.05), canvas.height - footerHeight / 2);
+    context.fillText(
+      "ZUITAR · PHOTO BOOTH DEMO",
+      Math.round(canvas.width * 0.05),
+      canvas.height - footerHeight / 2,
+    );
     setPhoto(canvas.toDataURL("image/jpeg", 0.92));
     setAiPhoto(null);
     setShowAi(false);
@@ -137,34 +163,48 @@ function Home() {
       bitmap.close();
       setCameraError(null);
     } catch {
-      setCameraError(isHindi ? "यह फोटो खुल नहीं सकी। दूसरी image चुनें।" : "This photo could not be opened. Choose another image.");
+      setCameraError(
+        isHindi
+          ? "यह फोटो खुल नहीं सकी। दूसरी image चुनें।"
+          : "This photo could not be opened. Choose another image.",
+      );
     }
   };
 
-  const enhancePhoto = async (scene: "photo" | "demo" = "photo") => {
+  const enhancePhoto = async (scene = "photo", interaction = "selfie") => {
     if (!photo || aiBusy) return;
     setAiBusy(true);
     setAiError(null);
+    setLastAttempt({ scene, interaction });
     try {
       const image = await (await fetch(photo)).blob();
       const form = new FormData();
       form.append("image", image, "customer-photo.jpg");
       form.append("scene", scene);
-      form.append("interaction", "selfie");
+      form.append("interaction", interaction);
       const response = await fetch("/api/enhance", { method: "POST", body: form });
       const result = (await response.json().catch(() => ({}))) as { b64?: string; code?: string };
       if (!response.ok || !result.b64) {
-        const message = result.code === "not_configured"
-          ? (isHindi ? "AI अभी booth settings में चालू नहीं है।" : "AI is not enabled in booth settings yet.")
-          : result.code === "credits"
-            ? (isHindi ? "AI credits उपलब्ध नहीं हैं।" : "AI credits are unavailable.")
-            : (isHindi ? "AI edit अभी पूरा नहीं हो सका।" : "The AI edit could not be completed.");
+        const message =
+          result.code === "not_configured"
+            ? isHindi
+              ? "AI अभी booth settings में चालू नहीं है।"
+              : "AI is not enabled in booth settings yet."
+            : result.code === "credits"
+              ? isHindi
+                ? "AI credits उपलब्ध नहीं हैं।"
+                : "AI credits are unavailable."
+              : isHindi
+                ? "AI edit अभी पूरा नहीं हो सका।"
+                : "The AI edit could not be completed.";
         throw new Error(message);
       }
       setAiPhoto(`data:image/jpeg;base64,${result.b64}`);
       setShowAi(true);
     } catch (error) {
-      setAiError(error instanceof Error ? error.message : (isHindi ? "AI edit विफल हुआ।" : "AI edit failed."));
+      setAiError(
+        error instanceof Error ? error.message : isHindi ? "AI edit विफल हुआ।" : "AI edit failed.",
+      );
     } finally {
       setAiBusy(false);
     }
@@ -192,7 +232,10 @@ function Home() {
           ZUITAR
         </h1>
         <p className="mt-3 text-lg text-muted-foreground md:text-2xl">{t.choose}</p>
-        <button onClick={() => setLang(lang === "en" ? "hi" : "en")} className="zt-btn-ghost mt-3 border border-border">
+        <button
+          onClick={() => setLang(lang === "en" ? "hi" : "en")}
+          className="zt-btn-ghost mt-3 border border-border"
+        >
           {LangToggleLabel(lang)}
         </button>
       </header>
@@ -206,8 +249,12 @@ function Home() {
             className={`zt-card group relative flex min-h-44 flex-col justify-end overflow-hidden rounded-3xl border border-border bg-gradient-to-br ${c.tone} to-card p-6 transition-transform active:scale-[0.98] md:min-h-[24rem] md:p-8`}
             style={{ animationDelay: `${i * 90}ms` }}
           >
-            <span className="absolute right-6 top-6 text-6xl font-bold text-foreground/10 md:text-8xl">0{i + 1}</span>
-            <p className="text-sm font-semibold uppercase tracking-[0.25em] text-primary">{t[c.kicker]}</p>
+            <span className="absolute right-6 top-6 text-6xl font-bold text-foreground/10 md:text-8xl">
+              0{i + 1}
+            </span>
+            <p className="text-sm font-semibold uppercase tracking-[0.25em] text-primary">
+              {t[c.kicker]}
+            </p>
             <h2 className="mt-2 text-3xl font-bold leading-tight md:text-4xl">{t[c.id]}</h2>
             <p className="mt-2 text-muted-foreground">{t[`${c.id}Sub`]}</p>
             {!ready?.[c.id] ? (
@@ -226,14 +273,22 @@ function Home() {
       <section className="mx-auto mt-7 w-full max-w-7xl rounded-3xl border border-border bg-card p-5 md:mt-9 md:p-7">
         <div className="flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
           <div>
-            <h2 className="text-xl font-bold md:text-2xl">{isHindi ? "अपना फोटो बूथ डेमो" : "Try the photo booth demo"}</h2>
+            <h2 className="text-xl font-bold md:text-2xl">
+              {isHindi ? "अपना फोटो बूथ डेमो" : "Try the photo booth demo"}
+            </h2>
             <p className="mt-1 max-w-2xl text-sm text-muted-foreground md:text-base">
               {isHindi
                 ? "फोन या लैपटॉप से फोटो लें या चुनें। AI से फोटो बेहतर करें, फिर देखें और डाउनलोड करें।"
                 : "Take or choose a photo on your phone or laptop. Enhance your photo with AI, then preview and download it."}
             </p>
           </div>
-          <button onClick={() => { setPhoto(null); setBoothOpen(true); }} className="zt-btn-primary shrink-0">
+          <button
+            onClick={() => {
+              setPhoto(null);
+              setBoothOpen(true);
+            }}
+            className="zt-btn-primary shrink-0"
+          >
             {isHindi ? "कैमरा खोलें" : "Open camera"}
           </button>
         </div>
@@ -241,34 +296,74 @@ function Home() {
 
       {dev && (
         <nav className="mx-auto mt-6 flex gap-3 font-mono text-xs text-muted-foreground">
-          <span className="rounded border px-2 py-1">TEST MODE</span><Link to="/selfie" className="underline">engine test: selfie</Link>
-          <Link to="/world" className="underline">engine test: world</Link>
+          <span className="rounded border px-2 py-1">TEST MODE</span>
+          <Link to="/selfie" className="underline">
+            engine test: selfie
+          </Link>
+          <Link to="/world" className="underline">
+            engine test: world
+          </Link>
         </nav>
       )}
       {flash && (
-        <div className="fixed bottom-6 left-1/2 -translate-x-1/2 rounded-full bg-overlay px-5 py-2 text-sm">{flash}</div>
+        <div className="fixed bottom-6 left-1/2 -translate-x-1/2 rounded-full bg-overlay px-5 py-2 text-sm">
+          {flash}
+        </div>
       )}
 
       {boothOpen && (
         <div className="fixed inset-0 z-50 overflow-y-auto bg-stage/95 px-4 py-6 backdrop-blur-sm">
-          <section role="dialog" aria-modal="true" aria-labelledby="booth-title" className="mx-auto flex min-h-full w-full max-w-2xl flex-col rounded-3xl border border-border bg-card p-5 shadow-2xl md:p-7">
+          <section
+            role="dialog"
+            aria-modal="true"
+            aria-labelledby="booth-title"
+            className="mx-auto flex min-h-full w-full max-w-2xl flex-col rounded-3xl border border-border bg-card p-5 shadow-2xl md:p-7"
+          >
             <div className="flex items-start justify-between gap-4">
               <div>
-                <h2 id="booth-title" className="text-2xl font-bold">{isHindi ? "फोटो बूथ डेमो" : "Photo booth demo"}</h2>
-                <p className="mt-1 text-sm text-muted-foreground">{isHindi ? "फोटो device पर रहती है; AI edit चुनने पर सेवा को भेजी जाएगी।" : "Your photo stays on this device unless you choose AI edit, which sends it to the service."}</p>
+                <h2 id="booth-title" className="text-2xl font-bold">
+                  {isHindi ? "फोटो बूथ डेमो" : "Photo booth demo"}
+                </h2>
+                <p className="mt-1 text-sm text-muted-foreground">
+                  {isHindi
+                    ? "फोटो device पर रहती है; AI edit चुनने पर सेवा को भेजी जाएगी।"
+                    : "Your photo stays on this device unless you choose AI edit, which sends it to the service."}
+                </p>
               </div>
-              <button aria-label={isHindi ? "बंद करें" : "Close"} onClick={() => setBoothOpen(false)} className="zt-btn-ghost">✕</button>
+              <button
+                aria-label={isHindi ? "बंद करें" : "Close"}
+                onClick={() => setBoothOpen(false)}
+                className="zt-btn-ghost"
+              >
+                ✕
+              </button>
             </div>
 
             <div className="mt-5 flex min-h-64 flex-1 items-center justify-center overflow-hidden rounded-2xl bg-black">
               {photo ? (
                 <div className="relative flex h-full w-full items-center justify-center">
-                  <img src={displayedPhoto ?? photo} alt={isHindi ? "आपकी ली गई फोटो" : "Your captured photo"} className="max-h-[65vh] w-full object-contain" />
-                  {showAi && <span className="absolute left-3 top-3 rounded-full bg-warning px-3 py-1 text-xs font-bold text-background">{isHindi ? "AI से बना" : "AI GENERATED"}</span>}
-                  {aiBusy && <div className="absolute inset-0 flex items-center justify-center bg-black/40"><span className="rounded-xl bg-overlay px-5 py-3">{isHindi ? "AI photo बना रहा है…" : "Enhancing with AI…"}</span></div>}
+                  <img
+                    src={displayedPhoto ?? photo}
+                    alt={isHindi ? "आपकी ली गई फोटो" : "Your captured photo"}
+                    className="max-h-[65vh] w-full object-contain"
+                  />
+                  {showAi && (
+                    <span className="absolute left-3 top-3 rounded-full bg-warning px-3 py-1 text-xs font-bold text-background">
+                      {isHindi ? "AI से बना" : "AI GENERATED"}
+                    </span>
+                  )}
+                  {aiBusy && (
+                    <div className="absolute inset-0 flex items-center justify-center bg-black/40">
+                      <span className="rounded-xl bg-overlay px-5 py-3">
+                        {isHindi ? "AI photo बना रहा है…" : "Enhancing with AI…"}
+                      </span>
+                    </div>
+                  )}
                 </div>
               ) : cameraError ? (
-                <p role="alert" className="max-w-md p-6 text-center text-sm text-white">{cameraError}</p>
+                <p role="alert" className="max-w-md p-6 text-center text-sm text-white">
+                  {cameraError}
+                </p>
               ) : (
                 <video
                   ref={videoRef}
@@ -285,20 +380,111 @@ function Home() {
             <div className="mt-5 flex flex-wrap justify-center gap-3">
               {photo ? (
                 <>
-                  <button onClick={() => { setPhoto(null); setAiPhoto(null); setShowAi(false); setAiError(null); setCameraError(null); }} className="zt-btn-ghost">{isHindi ? "दोबारा लें" : "Retake"}</button>
-                  <a href={displayedPhoto ?? photo} download={showAi ? "zuitar-ai-photo.jpg" : "zuitar-photo-booth.jpg"} className="zt-btn-primary">{isHindi ? "डाउनलोड" : "Download photo"}</a>
-                  <button onClick={() => void enhancePhoto("photo")} disabled={aiBusy} className="zt-btn-secondary disabled:opacity-50">{isHindi ? "✦ AI से सुधारें" : "✦ Enhance with AI"}</button>
-                  {dev && demoAiReady && <button onClick={() => void enhancePhoto("demo")} disabled={aiBusy} className="zt-btn-secondary disabled:opacity-50">{isHindi ? "✦ TEST: काल्पनिक AI सेल्फी" : "✦ TEST: Fictional AI selfie"}</button>}
-                  {aiPhoto && <button onClick={() => setShowAi((value) => !value)} className="zt-btn-secondary">{showAi ? (isHindi ? "Original दिखाएँ" : "Show original") : (isHindi ? "AI photo दिखाएँ" : "Show AI photo")}</button>}
+                  <button
+                    onClick={() => {
+                      setPhoto(null);
+                      setAiPhoto(null);
+                      setShowAi(false);
+                      setAiError(null);
+                      setCameraError(null);
+                    }}
+                    className="zt-btn-ghost"
+                  >
+                    {isHindi ? "दोबारा लें" : "Retake"}
+                  </button>
+                  <a
+                    href={displayedPhoto ?? photo}
+                    download={showAi ? "zuitar-ai-photo.jpg" : "zuitar-photo-booth.jpg"}
+                    className="zt-btn-primary"
+                  >
+                    {isHindi ? "डाउनलोड" : "Download photo"}
+                  </a>
+                  <div className="flex w-full flex-wrap justify-center gap-2 border-t border-border pt-3">
+                    <p className="w-full text-center text-xs font-semibold text-muted-foreground">
+                      {isHindi ? "AI अनुभव चुनें:" : "Choose AI experience:"}
+                    </p>
+                    <button
+                      onClick={() => void enhancePhoto("modi", "hug")}
+                      disabled={aiBusy}
+                      className="zt-btn-secondary text-sm disabled:opacity-50"
+                    >
+                      {isHindi ? "🫂 मोदी जी से गले मिलें" : "🫂 Hug with Modi"}
+                    </button>
+                    <button
+                      onClick={() => void enhancePhoto("modi", "handshake")}
+                      disabled={aiBusy}
+                      className="zt-btn-secondary text-sm disabled:opacity-50"
+                    >
+                      {isHindi ? "🤝 मोदी जी से हाथ मिलाएँ" : "🤝 Handshake with Modi"}
+                    </button>
+                    <button
+                      onClick={() => void enhancePhoto("modi", "meeting")}
+                      disabled={aiBusy}
+                      className="zt-btn-secondary text-sm disabled:opacity-50"
+                    >
+                      {isHindi ? "💬 मोदी जी से मुलाक़ात" : "💬 Meeting with Modi"}
+                    </button>
+                    <button
+                      onClick={() => void enhancePhoto("yogi", "meeting")}
+                      disabled={aiBusy}
+                      className="zt-btn-secondary text-sm disabled:opacity-50"
+                    >
+                      {isHindi ? "💬 योगी जी से मुलाक़ात" : "💬 Meeting with Yogi"}
+                    </button>
+                    <button
+                      onClick={() => void enhancePhoto("bjp", "selfie")}
+                      disabled={aiBusy}
+                      className="zt-btn-secondary text-sm disabled:opacity-50"
+                    >
+                      {isHindi ? "🪷 BJP लुक" : "🪷 BJP Look"}
+                    </button>
+                    <button
+                      onClick={() => void enhancePhoto("photo", "selfie")}
+                      disabled={aiBusy}
+                      className="zt-btn-secondary text-sm disabled:opacity-50"
+                    >
+                      {isHindi ? "✦ फोटो सुधारें" : "✦ Photo Enhance"}
+                    </button>
+                  </div>
+                  {dev && demoAiReady && (
+                    <button
+                      onClick={() => void enhancePhoto("demo", "selfie")}
+                      disabled={aiBusy}
+                      className="zt-btn-secondary disabled:opacity-50"
+                    >
+                      {isHindi ? "✦ TEST: काल्पनिक AI सेल्फी" : "✦ TEST: Fictional AI selfie"}
+                    </button>
+                  )}
+                  {aiPhoto && (
+                    <button
+                      onClick={() => setShowAi((value) => !value)}
+                      className="zt-btn-secondary"
+                    >
+                      {showAi
+                        ? isHindi
+                          ? "Original दिखाएँ"
+                          : "Show original"
+                        : isHindi
+                          ? "AI photo दिखाएँ"
+                          : "Show AI photo"}
+                    </button>
+                  )}
                 </>
               ) : (
                 <>
-                  <button onClick={capturePhoto} disabled={!cameraReady || !!cameraError} className="zt-btn-primary disabled:cursor-not-allowed disabled:opacity-50">
+                  <button
+                    onClick={capturePhoto}
+                    disabled={!cameraReady || !!cameraError}
+                    className="zt-btn-primary disabled:cursor-not-allowed disabled:opacity-50"
+                  >
                     {isHindi ? "फोटो लें" : "Capture photo"}
                   </button>
                   {canFlipCamera && cameraReady && !cameraError && (
                     <button
-                      onClick={() => { setCameraReady(false); setFacingMode((mode) => mode === "user" ? "environment" : "user"); }}
+                      onClick={() => {
+                        setCameraReady(false);
+                        setFacingMode((mode) => (mode === "user" ? "environment" : "user"));
+                      }}
                       className="zt-btn-ghost"
                     >
                       {isHindi ? "कैमरा बदलें" : "Flip camera"}
@@ -310,14 +496,38 @@ function Home() {
                       type="file"
                       accept="image/*"
                       className="sr-only"
-                      onChange={(event) => { void choosePhoto(event.currentTarget.files?.[0]); event.currentTarget.value = ""; }}
+                      onChange={(event) => {
+                        void choosePhoto(event.currentTarget.files?.[0]);
+                        event.currentTarget.value = "";
+                      }}
                     />
                   </label>
                 </>
               )}
             </div>
-            {photo && <p className="mt-3 text-center text-xs text-muted-foreground">{isHindi ? "AI edit चुनने पर फोटो AI सेवा को भेजी जाएगी और परिणाम AI-generated चिह्नित होगा।" : "Choosing AI edit sends the photo to the AI service; its result is labelled AI-generated."}</p>}
-            {aiError && <p role="alert" className="mt-2 text-center text-sm text-destructive">{aiError}</p>}
+            {photo && (
+              <p className="mt-3 text-center text-xs text-muted-foreground">
+                {isHindi
+                  ? "AI edit चुनने पर फोटो AI सेवा को भेजी जाएगी और परिणाम AI-generated चिह्नित होगा।"
+                  : "Choosing AI edit sends the photo to the AI service; its result is labelled AI-generated."}
+              </p>
+            )}
+            {aiError && (
+              <div className="mt-3 flex flex-col items-center gap-2">
+                <p role="alert" className="text-center text-sm font-medium text-destructive">
+                  {aiError}
+                </p>
+                {lastAttempt && (
+                  <button
+                    onClick={() => void enhancePhoto(lastAttempt.scene, lastAttempt.interaction)}
+                    disabled={aiBusy}
+                    className="zt-btn-secondary text-xs"
+                  >
+                    {isHindi ? "दोबारा प्रयास करें (Retry)" : "Retry"}
+                  </button>
+                )}
+              </div>
+            )}
           </section>
         </div>
       )}

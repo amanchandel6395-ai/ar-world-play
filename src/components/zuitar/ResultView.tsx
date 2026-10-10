@@ -10,7 +10,8 @@ import { useLang } from "@/lib/i18n";
 async function toBase64(b: Blob) {
   const buf = new Uint8Array(await b.arrayBuffer());
   let s = "";
-  for (let i = 0; i < buf.length; i += 0x8000) s += String.fromCharCode(...buf.subarray(i, i + 0x8000));
+  for (let i = 0; i < buf.length; i += 0x8000)
+    s += String.fromCharCode(...buf.subarray(i, i + 0x8000));
   return btoa(s);
 }
 
@@ -42,7 +43,11 @@ export function ResultView({
   const [qrBusy, setQrBusy] = useState(false);
   const share = useServerFn(createShare);
   const [, , t] = useLang();
-  const [video, setVideo] = useState<{ state: "idle" | "busy" | "ready"; url?: string; progress?: number | null }>({ state: "idle" });
+  const [video, setVideo] = useState<{
+    state: "idle" | "busy" | "ready";
+    url?: string;
+    progress?: number | null;
+  }>({ state: "idle" });
   const [videoMsg, setVideoMsg] = useState<string | null>(null);
   const alive = useRef(true);
   const pollTimer = useRef<number | undefined>(undefined);
@@ -55,12 +60,16 @@ export function ResultView({
   }, []);
   const codeMsg = (code: string | undefined, kind: "ai" | "video") =>
     code === "not_configured"
-      ? kind === "ai" ? t.aiNotSetup : t.videoNotSetup
-      : code === "credits"
+      ? kind === "ai"
+        ? t.aiNotSetup
+        : t.videoNotSetup
+      : code === "credits" || code === "quota_exceeded"
         ? t.aiCredits
-        : code === "busy"
+        : code === "busy" || code === "rate_limit"
           ? t.aiBusy
-          : kind === "ai" ? t.aiFail : t.videoFail;
+          : kind === "ai"
+            ? t.aiFail
+            : t.videoFail;
   useIdleReset(KIOSK.resultTimeoutMs, onHome);
 
   const current = showAi && aiPhoto ? aiPhoto : photo;
@@ -78,7 +87,9 @@ export function ResultView({
     setQrBusy(true);
     setMsg(null);
     try {
-      const { token } = await share({ data: { imageBase64: await toBase64(current), aiGenerated: showAi } });
+      const { token } = await share({
+        data: { imageBase64: await toBase64(current), aiGenerated: showAi },
+      });
       const link = `${window.location.origin}/r/${token}`;
       setQr(await QRCode.toDataURL(link, { width: 640, margin: 1 }));
     } catch {
@@ -136,10 +147,16 @@ export function ResultView({
         if (Date.now() > deadline) return fail(t.videoFail);
         try {
           const r = await fetch(`/api/video?id=${encodeURIComponent(id)}`);
-          const p = (await r.json().catch(() => ({}))) as { status?: string; url?: string | null; progress?: number | null; code?: string };
+          const p = (await r.json().catch(() => ({}))) as {
+            status?: string;
+            url?: string | null;
+            progress?: number | null;
+            code?: string;
+          };
           if (!alive.current) return;
           if (!r.ok) {
-            if (r.status === 429 || r.status >= 500) pollTimer.current = window.setTimeout(poll, 8000);
+            if (r.status === 429 || r.status >= 500)
+              pollTimer.current = window.setTimeout(poll, 8000);
             else fail(codeMsg(p.code, "video"));
             return;
           }
@@ -160,7 +177,11 @@ export function ResultView({
   return (
     <div className="flex min-h-dvh flex-col bg-stage lg:flex-row">
       <div className="relative flex flex-1 items-center justify-center p-4 lg:p-8">
-        <img src={url} alt="Your ZUITAR photo" className="max-h-[70dvh] w-auto max-w-full rounded-2xl shadow-2xl lg:max-h-[88dvh]" />
+        <img
+          src={url}
+          alt="Your ZUITAR photo"
+          className="max-h-[70dvh] w-auto max-w-full rounded-2xl shadow-2xl lg:max-h-[88dvh]"
+        />
         {showAi && (
           <span className="absolute left-6 top-6 rounded-full bg-warning px-4 py-1.5 text-sm font-bold uppercase tracking-wider text-background lg:left-12 lg:top-12">
             {t.aiGenerated}
@@ -177,7 +198,11 @@ export function ResultView({
         {qr ? (
           <div className="flex flex-col items-center gap-3 rounded-2xl bg-card p-5 text-center">
             <p className="text-xl font-bold">Scan to get your photo</p>
-            <img src={qr} alt="QR code to download your photo" className="w-64 rounded-lg bg-foreground p-2 lg:w-72" />
+            <img
+              src={qr}
+              alt="QR code to download your photo"
+              className="w-64 rounded-lg bg-foreground p-2 lg:w-72"
+            />
             <p className="text-sm text-muted-foreground">Link expires in 24 hours</p>
             <button onClick={() => setQr(null)} className="zt-btn-ghost">
               Close
@@ -200,12 +225,22 @@ export function ResultView({
               </button>
             </div>
             {allowAi && !aiPhoto && (
-              <button onClick={enhance} disabled={aiBusy} className="zt-btn-ghost border border-border">
+              <button
+                onClick={enhance}
+                disabled={aiBusy}
+                className="zt-btn-ghost border border-border"
+              >
                 ✦ {t.aiLabel}
               </button>
             )}
             {aiPhoto && (
-              <button onClick={() => { setShowAi((v) => !v); setQr(null); }} className="zt-btn-ghost border border-border">
+              <button
+                onClick={() => {
+                  setShowAi((v) => !v);
+                  setQr(null);
+                }}
+                className="zt-btn-ghost border border-border"
+              >
                 {showAi ? "Show original photo" : "Show AI-generated version"}
               </button>
             )}
@@ -215,7 +250,9 @@ export function ResultView({
               </button>
             )}
             {!allowVideo && videoConfigured && (
-              <p className="rounded-2xl border border-border px-4 py-3 text-center text-sm text-muted-foreground">{t.videoUnavailable}</p>
+              <p className="rounded-2xl border border-border px-4 py-3 text-center text-sm text-muted-foreground">
+                {t.videoUnavailable}
+              </p>
             )}
             {video.state === "busy" && (
               <div className="flex items-center gap-3 rounded-2xl bg-card p-4">
@@ -229,12 +266,24 @@ export function ResultView({
             {video.state === "ready" && video.url && (
               <div className="flex flex-col gap-2 rounded-2xl bg-card p-3">
                 <div className="relative">
-                  <video src={video.url} controls playsInline className="mx-auto max-h-[50dvh] rounded-xl" aria-label={t.videoReady} />
+                  <video
+                    src={video.url}
+                    controls
+                    playsInline
+                    className="mx-auto max-h-[50dvh] rounded-xl"
+                    aria-label={t.videoReady}
+                  />
                   <span className="absolute left-2 top-2 rounded-full bg-warning px-3 py-1 text-xs font-bold uppercase text-background">
                     {t.aiGenerated}
                   </span>
                 </div>
-                <a href={video.url} download="zuitar-ai-video.mp4" target="_blank" rel="noreferrer" className="zt-btn-secondary text-center">
+                <a
+                  href={video.url}
+                  download="zuitar-ai-video.mp4"
+                  target="_blank"
+                  rel="noreferrer"
+                  className="zt-btn-secondary text-center"
+                >
                   {t.downloadVideo}
                 </a>
               </div>
@@ -242,7 +291,16 @@ export function ResultView({
             {videoMsg && <p className="text-center text-destructive">{videoMsg}</p>}
           </>
         )}
-        {msg && <p className="text-center text-destructive">{msg}</p>}
+        {msg && (
+          <div className="flex flex-col items-center gap-2 rounded-2xl border border-destructive/40 bg-destructive/10 p-3">
+            <p className="text-center text-sm font-medium text-destructive">{msg}</p>
+            {allowAi && !aiPhoto && (
+              <button onClick={enhance} disabled={aiBusy} className="zt-btn-secondary text-xs">
+                {t.retry}
+              </button>
+            )}
+          </div>
+        )}
       </div>
     </div>
   );

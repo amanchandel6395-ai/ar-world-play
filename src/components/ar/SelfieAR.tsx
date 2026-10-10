@@ -86,7 +86,10 @@ export function SelfieAR() {
 
         const bgScene = new THREE.Scene();
         bgScene.add(
-          new THREE.Mesh(quad, new THREE.MeshBasicMaterial({ map: vtex, depthTest: false, depthWrite: false })),
+          new THREE.Mesh(
+            quad,
+            new THREE.MeshBasicMaterial({ map: vtex, depthTest: false, depthWrite: false }),
+          ),
         );
 
         // Person layer: camera pixels with alpha = segmentation confidence (real occlusion).
@@ -121,8 +124,12 @@ export function SelfieAR() {
         const ringGeo = new THREE.TorusGeometry(13, 0.9, 16, 120);
         ringGeo.rotateX(Math.PI / 2);
         ringGeo.translate(0, 2, 0);
-        anchorBack.add(new THREE.Mesh(ringGeo, new THREE.MeshNormalMaterial({ clippingPlanes: [backPlane] })));
-        anchorFront.add(new THREE.Mesh(ringGeo, new THREE.MeshNormalMaterial({ clippingPlanes: [frontPlane] })));
+        anchorBack.add(
+          new THREE.Mesh(ringGeo, new THREE.MeshNormalMaterial({ clippingPlanes: [backPlane] })),
+        );
+        anchorFront.add(
+          new THREE.Mesh(ringGeo, new THREE.MeshNormalMaterial({ clippingPlanes: [frontPlane] })),
+        );
         const cube = new THREE.Mesh(new THREE.BoxGeometry(4, 4, 4), new THREE.MeshNormalMaterial());
         cube.position.set(0, 16, 0);
         anchorFront.add(cube);
@@ -207,7 +214,13 @@ export function SelfieAR() {
                 if (!maskBuf || maskBuf.length !== w * h) {
                   maskBuf = new Uint8Array(w * h);
                   maskTex.dispose();
-                  maskTex = new THREE.DataTexture(maskBuf, w, h, THREE.RedFormat, THREE.UnsignedByteType);
+                  maskTex = new THREE.DataTexture(
+                    maskBuf,
+                    w,
+                    h,
+                    THREE.RedFormat,
+                    THREE.UnsignedByteType,
+                  );
                   maskTex.minFilter = maskTex.magFilter = THREE.LinearFilter;
                   maskTex.unpackAlignment = 1;
                   personMat.uniforms["uMask"]!.value = maskTex;
@@ -262,12 +275,24 @@ export function SelfieAR() {
   }, []);
 
   const rows: DebugRow[] = [
-    { label: "AR ENGINE", value: dbg.engine ? "ON · MediaPipe" : "OFF", state: dbg.engine ? "on" : "off" },
+    {
+      label: "AR ENGINE",
+      value: dbg.engine ? "ON · MediaPipe" : "OFF",
+      state: dbg.engine ? "on" : "off",
+    },
     { label: "RENDERER", value: "three.js WebGL", state: "info" },
     { label: "CAMERA", value: dbg.camera ? "ON" : "OFF", state: dbg.camera ? "on" : "off" },
     { label: "FACING", value: "FRONT (user)", state: "info" },
-    { label: "TRACKING", value: dbg.tracking ? "ON · face 6DoF" : "OFF", state: dbg.tracking ? "on" : "off" },
-    { label: "SEGMENTATION", value: dbg.segmentation ? "ON" : "OFF", state: dbg.segmentation ? "on" : "off" },
+    {
+      label: "TRACKING",
+      value: dbg.tracking ? "ON · face 6DoF" : "OFF",
+      state: dbg.tracking ? "on" : "off",
+    },
+    {
+      label: "SEGMENTATION",
+      value: dbg.segmentation ? "ON" : "OFF",
+      state: dbg.segmentation ? "on" : "off",
+    },
     { label: "BODY POSE", value: "not in PoC", state: "warn" },
     { label: "FPS", value: String(dbg.fps) },
     { label: "VIDEO", value: dbg.res },
@@ -285,7 +310,10 @@ export function SelfieAR() {
         <div className="flex items-start justify-between gap-2">
           <DebugPanel rows={rows} />
           <div className="pointer-events-auto flex flex-col gap-2">
-            <a href="/" className="rounded-md border border-border bg-overlay px-3 py-1.5 font-mono text-xs text-foreground">
+            <a
+              href="/"
+              className="rounded-md border border-border bg-overlay px-3 py-1.5 font-mono text-xs text-foreground"
+            >
               ← back
             </a>
             <button
