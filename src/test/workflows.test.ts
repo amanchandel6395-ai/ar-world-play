@@ -89,7 +89,7 @@ describe("Workflow Tests: Complete Repository Repair & Features", () => {
   });
 
   it("G. Validates reference asset URL resolution and signing", async () => {
-    const yogiAsset = REFERENCE_ASSETS.find((a) => a.candidate === "yogi");
+    const yogiAsset = REFERENCE_ASSETS.find((a) => "candidate" in a && a.candidate === "yogi");
     if (!yogiAsset || !("url" in yogiAsset)) throw new Error("Missing yogi asset");
     const fullUrl = referenceUrl(yogiAsset.url);
     expect(fullUrl).toContain("dc5afdb0fe2b72a63ddddacca5ad7fc1.png");
@@ -140,10 +140,10 @@ describe("Workflow Tests: Complete Repository Repair & Features", () => {
     expect(bjpPrompt).toContain("BJP");
 
     // Verify 503 not_configured when neither key is provided
-    const oldLovable = process.env.LOVABLE_API_KEY;
-    const oldGemini = process.env.GEMINI_API_KEY;
-    delete process.env.LOVABLE_API_KEY;
-    delete process.env.GEMINI_API_KEY;
+    const oldLovable = process.env["LOVABLE_API_KEY"];
+    const oldGemini = process.env["GEMINI_API_KEY"];
+    delete process.env["LOVABLE_API_KEY"];
+    delete process.env["GEMINI_API_KEY"];
 
     try {
       const dummyReq = new Request("http://localhost/api/enhance", {
@@ -154,19 +154,19 @@ describe("Workflow Tests: Complete Repository Repair & Features", () => {
       const json = await res.json();
       expect(json.code).toBe("not_configured");
     } finally {
-      if (oldLovable) process.env.LOVABLE_API_KEY = oldLovable;
-      if (oldGemini) process.env.GEMINI_API_KEY = oldGemini;
+      if (oldLovable) process.env["LOVABLE_API_KEY"] = oldLovable;
+      if (oldGemini) process.env["GEMINI_API_KEY"] = oldGemini;
     }
   });
 
   it("J. Validates simulated Lovable retryable failure triggers fallback without infinite retries", async () => {
     const { handleEnhanceRequest } = await import("@/routes/api/enhance");
     const oldFetch = globalThis.fetch;
-    const oldLovable = process.env.LOVABLE_API_KEY;
-    const oldGemini = process.env.GEMINI_API_KEY;
+    const oldLovable = process.env["LOVABLE_API_KEY"];
+    const oldGemini = process.env["GEMINI_API_KEY"];
 
-    process.env.LOVABLE_API_KEY = "test-lovable-key";
-    process.env.GEMINI_API_KEY = "test-gemini-key";
+    process.env["LOVABLE_API_KEY"] = "test-lovable-key";
+    process.env["GEMINI_API_KEY"] = "test-gemini-key";
 
     let lovableCallCount = 0;
 
@@ -210,10 +210,10 @@ describe("Workflow Tests: Complete Repository Repair & Features", () => {
       expect(["denied", "busy", "failed", "credits"]).toContain(json.code);
     } finally {
       globalThis.fetch = oldFetch;
-      if (oldLovable) process.env.LOVABLE_API_KEY = oldLovable;
-      else delete process.env.LOVABLE_API_KEY;
-      if (oldGemini) process.env.GEMINI_API_KEY = oldGemini;
-      else delete process.env.GEMINI_API_KEY;
+      if (oldLovable) process.env["LOVABLE_API_KEY"] = oldLovable;
+      else delete process.env["LOVABLE_API_KEY"];
+      if (oldGemini) process.env["GEMINI_API_KEY"] = oldGemini;
+      else delete process.env["GEMINI_API_KEY"];
     }
   });
 });

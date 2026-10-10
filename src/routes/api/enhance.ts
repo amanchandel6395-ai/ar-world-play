@@ -64,11 +64,11 @@ function logAiEvent(
     event: string;
     provider: string;
     scene: string;
-    interaction?: string;
-    category?: string;
-    status?: number;
-    fallbackTriggered?: boolean;
-    errorSummary?: string;
+    interaction?: string | undefined;
+    category?: string | undefined;
+    status?: number | undefined;
+    fallbackTriggered?: boolean | undefined;
+    errorSummary?: string | undefined;
   },
 ) {
   const payload = JSON.stringify({
