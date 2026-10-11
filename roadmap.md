@@ -1,5 +1,5 @@
 # Roadmap
 
-- [ ] Homepage: remove "Try the photo booth demo" section + modal and its camera/upload/AI logic; keep the three experience cards linking to /experience/$scene (yogi, modi, bjp)
-- [ ] Verify experience route keeps Live Camera / Upload Photo / back-home controls and setup-incomplete checks
-- [ ] Run typecheck/tests; report files changed and results
+- [x] Homepage: removed "Try the photo booth demo" section + modal and its camera/upload/AI logic; three cards still link to /experience/$scene (yogi, modi, bjp)
+- [x] Experience intro: added Upload Photo alongside Start camera; back-home and setup-incomplete checks preserved
+- [x] Typecheck passed; tests run (1 pre-existing env-dependent failure, unrelated)
