@@ -45,6 +45,14 @@ export function ResultView({
   const share = useServerFn(createShare);
   const [lang, , t] = useLang();
   const isHindi = lang === "hi";
+  const [boothMode, setBoothMode] = useState(false);
+
+  useEffect(() => {
+    setBoothMode(
+      new URLSearchParams(window.location.search).get("mode") === "booth" ||
+        localStorage.getItem("zuitar.deviceMode") === "booth",
+    );
+  }, []);
 
   const sceneOptions: Array<{
     id: InteractionId;
@@ -70,6 +78,7 @@ export function ResultView({
             label: { en: "Meeting with Modi", hi: "मोदी जी से मुलाक़ात" },
           },
           { id: "scarf", icon: "🧣", label: { en: "Saffron Scarf Honor", hi: "अंगवस्त्र सम्मान" } },
+          { id: "gift", icon: "🎁", label: { en: "Presenting Gift / Memento", hi: "स्मृति चिन्ह / उपहार भेंट" } },
         ]
       : sceneId === "yogi"
         ? [
@@ -94,10 +103,16 @@ export function ResultView({
               icon: "🧣",
               label: { en: "Saffron Scarf Honor", hi: "अंगवस्त्र सम्मान" },
             },
+            {
+              id: "gift",
+              icon: "🎁",
+              label: { en: "Presenting Gift / Memento", hi: "स्मृति चिन्ह / उपहार भेंट" },
+            },
           ]
         : [
             { id: "selfie", icon: "🪷", label: { en: "BJP Lotus Look", hi: "भाजपा कमल लुक" } },
             { id: "scarf", icon: "🧣", label: { en: "BJP Cap & Scarf", hi: "भाजपा टोपी व पटका" } },
+            { id: "gift", icon: "🎁", label: { en: "Ceremonial Memento", hi: "स्मृति चिन्ह व सम्मान" } },
             { id: "event", icon: "🚩", label: { en: "BJP Flag Style", hi: "भाजपा ध्वज लुक" } },
           ];
   const [video, setVideo] = useState<{
@@ -256,60 +271,119 @@ export function ResultView({
       <div className="flex w-full flex-col gap-3 p-4 pb-8 lg:w-[26rem] lg:justify-center lg:p-8">
         {qr ? (
           <div className="flex flex-col items-center gap-3 rounded-2xl bg-card p-5 text-center">
-            <p className="text-xl font-bold">Scan to get your photo</p>
+            <span className="text-3xl">📱</span>
+            <p className="text-xl font-bold">
+              {isHindi ? "फ़ोन से QR कोड स्कैन करें" : "Scan QR with your phone"}
+            </p>
+            <p className="text-xs text-muted-foreground">
+              {isHindi
+                ? "कैमरा खोलकर स्कैन करें, फ़ोटो आपके फ़ोन में खुल जाएगी और डाउनलोड हो जाएगी।"
+                : "Open your mobile camera to scan and download the photo to your phone."}
+            </p>
             <img
               src={qr}
               alt="QR code to download your photo"
-              className="w-64 rounded-lg bg-foreground p-2 lg:w-72"
+              className="w-64 rounded-xl bg-foreground p-3 lg:w-72 shadow-lg"
             />
-            <p className="text-sm text-muted-foreground">Link expires in 24 hours</p>
-            <button onClick={() => setQr(null)} className="zt-btn-ghost">
-              Close
-            </button>
+            <p className="text-xs text-muted-foreground">{t.expires}</p>
+            <div className="flex gap-2 mt-2">
+              <button onClick={() => setQr(null)} className="zt-btn-ghost">
+                ✕ {t.close}
+              </button>
+              <button onClick={onRetake} className="zt-btn-secondary">
+                🔄 {t.retake}
+              </button>
+            </div>
           </div>
         ) : (
           <>
-            <div className="grid grid-cols-2 gap-3">
-              <button onClick={download} className="zt-btn-primary">
-                Download
+            <div className="grid grid-cols-2 gap-2.5">
+              {!boothMode ? (
+                <>
+                  <button onClick={download} className="zt-btn-primary flex items-center justify-center gap-1.5">
+                    <span>⬇️</span>
+                    <span>{t.download}</span>
+                  </button>
+                  <button onClick={makeQr} disabled={qrBusy} className="zt-btn-secondary flex items-center justify-center gap-1.5">
+                    <span>📱</span>
+                    <span>{qrBusy ? t.creating : t.qr}</span>
+                  </button>
+                </>
+              ) : (
+                <button
+                  onClick={makeQr}
+                  disabled={qrBusy}
+                  className="col-span-2 zt-btn-primary flex items-center justify-center gap-2 py-3 text-base font-bold shadow-lg"
+                >
+                  <span>📱</span>
+                  <span>
+                    {qrBusy
+                      ? t.creating
+                      : (isHindi ? "फ़ोन में डाउनलोड करें (QR स्कैन)" : "Download to Phone (Scan QR)")}
+                  </span>
+                </button>
+              )}
+              <button onClick={onRetake} className="zt-btn-secondary flex items-center justify-center gap-1.5">
+                <span>🔄</span>
+                <span>{t.retake}</span>
               </button>
-              <button onClick={makeQr} disabled={qrBusy} className="zt-btn-secondary">
-                {qrBusy ? "Creating…" : "Scan QR"}
-              </button>
-              <button onClick={onRetake} className="zt-btn-secondary">
-                Retake
-              </button>
-              <button onClick={onHome} className="zt-btn-secondary">
-                Home
+              <button onClick={onHome} className="zt-btn-secondary flex items-center justify-center gap-1.5">
+                <span>🏠</span>
+                <span>{t.home}</span>
               </button>
             </div>
+
             {allowAi && (
-              <div className="flex flex-col gap-2 rounded-2xl border border-border bg-card/60 p-3">
-                <p className="text-xs font-semibold text-muted-foreground">
-                  {isHindi ? "अनुभव चुनें (Icons & Features):" : "Choose Experience Feature:"}
-                </p>
-                <div className="flex flex-col gap-1.5">
+              <div className="flex flex-col gap-2.5 rounded-2xl border border-border bg-card/60 p-3.5 shadow-sm">
+                <div className="flex items-center justify-between">
+                  <p className="text-xs font-bold uppercase tracking-wider text-primary">
+                    {isHindi ? "1. फीचर चुनें (Meeting, Selfie, Gift):" : "1. Choose Feature:"}
+                  </p>
+                  <span className="text-[11px] text-muted-foreground">
+                    {sceneOptions.length} {isHindi ? "विकल्प" : "options"}
+                  </span>
+                </div>
+                <div className="flex flex-col gap-1.5 max-h-[36vh] overflow-y-auto pr-1">
                   {sceneOptions.map((opt) => (
                     <button
                       key={opt.id}
-                      onClick={() => void enhance(opt.id)}
+                      type="button"
+                      onClick={() => setSelectedInteraction(opt.id)}
                       disabled={aiBusy}
                       className={`flex items-center justify-between rounded-xl border px-3 py-2 text-sm font-medium transition-all ${
                         selectedInteraction === opt.id
-                          ? "border-primary bg-primary/10 text-primary font-semibold"
+                          ? "border-primary bg-primary/15 text-primary font-bold ring-2 ring-primary/40 shadow-sm"
                           : "border-border/60 hover:bg-muted text-foreground"
                       } disabled:opacity-50`}
                     >
-                      <span className="flex items-center gap-2">
-                        <span className="text-lg">{opt.icon}</span>
+                      <span className="flex items-center gap-2.5">
+                        <span className="text-xl">{opt.icon}</span>
                         <span>{opt.label[lang]}</span>
                       </span>
-                      <span className="text-xs font-bold text-primary">
-                        {aiBusy && selectedInteraction === opt.id ? "…" : "✦"}
-                      </span>
+                      {selectedInteraction === opt.id ? (
+                        <span className="text-[11px] font-bold text-primary bg-primary/20 rounded-full px-2 py-0.5">
+                          ✓ {isHindi ? "चुना गया" : "Selected"}
+                        </span>
+                      ) : (
+                        <span className="text-xs text-muted-foreground">○</span>
+                      )}
                     </button>
                   ))}
                 </div>
+
+                <button
+                  type="button"
+                  onClick={() => void enhance(selectedInteraction)}
+                  disabled={aiBusy}
+                  className="zt-btn-primary mt-1 py-3 text-base font-bold flex items-center justify-center gap-2 w-full shadow-lg"
+                >
+                  <span>✦</span>
+                  <span>
+                    {aiBusy
+                      ? (isHindi ? "AI फोटो तैयार कर रहा है…" : "Generating AI Photo…")
+                      : (isHindi ? "AI फ़ोटो बनाएँ (Generate)" : "Generate AI Photo ✦")}
+                  </span>
+                </button>
               </div>
             )}
             {aiPhoto && (

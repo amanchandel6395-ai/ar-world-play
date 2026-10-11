@@ -8,6 +8,7 @@ export const INTERACTIONS = [
   "walk",
   "meeting",
   "scarf",
+  "gift",
   "event",
 ] as const;
 export type InteractionId = (typeof INTERACTIONS)[number];

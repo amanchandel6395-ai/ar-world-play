@@ -53,7 +53,13 @@ export function Experience({ sceneId }: { sceneId: SceneId }) {
       .catch(() => setConfigError(true));
   }, [fetchConfig]);
 
+  const [boothMode, setBoothMode] = useState(false);
+
   useEffect(() => {
+    setBoothMode(
+      new URLSearchParams(window.location.search).get("mode") === "booth" ||
+        localStorage.getItem("zuitar.deviceMode") === "booth",
+    );
     detectCapabilities().then(setCaps);
     loadConfig();
   }, [loadConfig]);
@@ -318,21 +324,23 @@ export function Experience({ sceneId }: { sceneId: SceneId }) {
                 disabled={!config}
                 className="zt-btn-primary min-w-56 text-lg sm:text-xl disabled:opacity-50"
               >
-                📷 {config ? t.startCamera : t.loading}
+                🤳 {config ? (boothMode ? t.clickSelfie : t.liveSelfie) : t.loading}
               </button>
-              <label className="zt-btn-secondary min-w-56 text-lg sm:text-xl flex items-center justify-center gap-2 cursor-pointer border border-border">
-                <span>📁</span>
-                <span>{lang === "hi" ? "फोटो अपलोड करें" : "Upload photo"}</span>
-                <input
-                  type="file"
-                  accept="image/*"
-                  className="sr-only"
-                  onChange={(e) => {
-                    void handleUploadPhoto(e.currentTarget.files?.[0]);
-                    e.currentTarget.value = "";
-                  }}
-                />
-              </label>
+              {!boothMode && (
+                <label className="zt-btn-secondary min-w-56 text-lg sm:text-xl flex items-center justify-center gap-2 cursor-pointer border border-border">
+                  <span>📁</span>
+                  <span>{t.uploadPhoto}</span>
+                  <input
+                    type="file"
+                    accept="image/*"
+                    className="sr-only"
+                    onChange={(e) => {
+                      void handleUploadPhoto(e.currentTarget.files?.[0]);
+                      e.currentTarget.value = "";
+                    }}
+                  />
+                </label>
+              )}
             </div>
           )}
           <div className="flex gap-3">

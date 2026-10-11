@@ -2,6 +2,8 @@ import { createFileRoute, Link } from "@tanstack/react-router";
 import { useEffect, useRef, useState } from "react";
 import { useServerFn } from "@tanstack/react-start";
 import { getPublicConfig } from "@/lib/config.functions";
+import { createShare } from "@/lib/share.functions";
+import QRCode from "qrcode";
 import type { PublicConfig } from "@/lib/config";
 import type { SceneId } from "@/ar/scenes";
 import { useDevMode } from "@/lib/kiosk";
@@ -32,6 +34,7 @@ const cards: {
   kicker: "selfieWith" | "style";
   tone: string;
   image: string;
+  title: { en: string; hi: string };
   badge: { en: string; hi: string };
   desc: { en: string; hi: string };
 }[] = [
@@ -40,10 +43,11 @@ const cards: {
     kicker: "selfieWith",
     tone: "from-amber-600/30 via-orange-500/15 to-card",
     image: "/assets/yogi.png",
+    title: { en: "Selfie with CM Yogi", hi: "सेल्फ़ी सीएम योगी के साथ" },
     badge: { en: "CM Yogi Adityanath", hi: "मुख्यमंत्री योगी आदित्यनाथ" },
     desc: {
-      en: "Selfie, handshake, meeting & blessing with CM Yogi",
-      hi: "सेल्फी, हाथ मिलाना, मुलाक़ात व सम्मान",
+      en: "Live selfie, handshake, meeting, scarf & gift with CM Yogi",
+      hi: "लाइव सेल्फ़ी, हाथ मिलाना, मुलाक़ात, अंगवस्त्र व उपहार भेंट",
     },
   },
   {
@@ -51,10 +55,11 @@ const cards: {
     kicker: "selfieWith",
     tone: "from-orange-500/30 via-amber-500/15 to-card",
     image: "/assets/modi.png",
+    title: { en: "Selfie with PM Modi", hi: "सेल्फ़ी पीएम मोदी के साथ" },
     badge: { en: "PM Narendra Modi", hi: "प्रधानमंत्री नरेंद्र मोदी" },
     desc: {
-      en: "Selfie, handshake, hug, meeting & scarf with PM Modi",
-      hi: "सेल्फी, हाथ मिलाना, गले मिलना, मुलाक़ात व अंगवस्त्र",
+      en: "Live selfie, handshake, hug, meeting, scarf & gift with PM Modi",
+      hi: "लाइव सेल्फ़ी, हाथ मिलाना, गले मिलना, मुलाक़ात, अंगवस्त्र व उपहार भेंट",
     },
   },
   {
@@ -62,10 +67,11 @@ const cards: {
     kicker: "style",
     tone: "from-emerald-600/30 via-green-600/15 to-card",
     image: "/assets/bjp.png",
+    title: { en: "BJP Look", hi: "भाजपा लुक" },
     badge: { en: "Official BJP Look", hi: "आधिकारिक भाजपा लुक" },
     desc: {
-      en: "Lotus emblem, scarf, cap and stage background",
-      hi: "कमल प्रतीक, पटका, टोपी एवं मंच पृष्ठभूमि",
+      en: "Lotus emblem, scarf, cap, flag and stage background",
+      hi: "कमल प्रतीक, पटका, टोपी, ध्वज एवं मंच पृष्ठभूमि",
     },
   },
 ];
@@ -89,6 +95,11 @@ function Home() {
   const [showAi, setShowAi] = useState(false);
   const [aiBusy, setAiBusy] = useState(false);
   const [aiError, setAiError] = useState<string | null>(null);
+  const [modalQr, setModalQr] = useState<string | null>(null);
+  const [modalQrBusy, setModalQrBusy] = useState(false);
+  const shareFn = useServerFn(createShare);
+  const [selectedModalScene, setSelectedModalScene] = useState<"modi" | "yogi" | "bjp">("modi");
+  const [selectedModalInteraction, setSelectedModalInteraction] = useState<string>("selfie");
   const [lastAttempt, setLastAttempt] = useState<{ scene: string; interaction: string } | null>(
     null,
   );
@@ -248,12 +259,34 @@ function Home() {
       }
       setAiPhoto(`data:image/jpeg;base64,${result.b64}`);
       setShowAi(true);
+      setModalQr(null);
+      if (boothMode) {
+        setTimeout(() => {
+          void makeModalQrWithPhoto(`data:image/jpeg;base64,${result.b64}`);
+        }, 100);
+      }
     } catch (error) {
       setAiError(
         error instanceof Error ? error.message : isHindi ? "AI edit विफल हुआ।" : "AI edit failed.",
       );
     } finally {
       setAiBusy(false);
+    }
+  };
+
+  const makeModalQrWithPhoto = async (targetPhoto?: string) => {
+    const raw = targetPhoto ?? (showAi && aiPhoto ? aiPhoto : photo);
+    if (!raw) return;
+    setModalQrBusy(true);
+    try {
+      const b64 = raw.replace(/^data:image\/\w+;base64,/, "");
+      const { token } = await shareFn({ data: { imageBase64: b64, aiGenerated: showAi } });
+      const link = `${window.location.origin}/r/${token}`;
+      setModalQr(await QRCode.toDataURL(link, { width: 512, margin: 1 }));
+    } catch {
+      setAiError(isHindi ? "QR कोड नहीं बन सका।" : "Could not generate QR code.");
+    } finally {
+      setModalQrBusy(false);
     }
   };
 
@@ -343,39 +376,59 @@ function Home() {
                   loading="eager"
                 />
               </div>
-              <h2 className="text-2xl font-bold leading-tight md:text-3xl">{t[c.id]}</h2>
+              <h2 className="text-2xl font-bold leading-tight md:text-3xl">{c.title[lang]}</h2>
               <p className="mt-1.5 text-xs text-muted-foreground md:text-sm">{c.desc[lang]}</p>
             </div>
 
-            {/* Action Buttons: Live AR Camera + Upload Photo */}
+            {/* Action Buttons: Live Selfie, Upload Photo, Video */}
             <div className="mt-2 flex flex-col gap-2 pt-3 border-t border-border/60">
-              <div className="grid grid-cols-2 gap-2">
+              <div className={`grid ${boothMode ? "grid-cols-2" : "grid-cols-3"} gap-2`}>
                 <Link
                   to="/experience/$scene"
                   params={{ scene: c.id }}
-                  className="zt-btn-primary flex items-center justify-center gap-1.5 py-2.5 text-sm font-semibold text-center"
+                  search={boothMode ? { mode: "booth" } : undefined}
+                  onClick={() =>
+                    localStorage.setItem("zuitar.deviceMode", boothMode ? "booth" : "personal")
+                  }
+                  className="zt-btn-primary flex items-center justify-center gap-1 py-2.5 text-xs sm:text-sm font-semibold text-center"
                 >
-                  <span>📷</span>
-                  <span>{isHindi ? "लाइव कैमरा" : "Live Camera"}</span>
+                  <span>🤳</span>
+                  <span>{boothMode ? (isHindi ? "सेल्फ़ी लें" : "Take Selfie") : (isHindi ? "लाइव सेल्फ़ी" : "Live Selfie")}</span>
                 </Link>
-                <label className="zt-btn-secondary flex items-center justify-center gap-1.5 py-2.5 text-sm font-semibold cursor-pointer text-center">
-                  <span>📁</span>
-                  <span>{isHindi ? "फोटो अपलोड" : "Upload Photo"}</span>
-                  <input
-                    type="file"
-                    accept="image/*"
-                    className="sr-only"
-                    onChange={(event) => {
-                      const file = event.currentTarget.files?.[0];
-                      if (file) {
-                        setActiveSceneTab(c.id);
-                        setBoothOpen(true);
-                        void choosePhoto(file);
-                      }
-                      event.currentTarget.value = "";
-                    }}
-                  />
-                </label>
+
+                {!boothMode && (
+                  <label className="zt-btn-secondary flex items-center justify-center gap-1 py-2.5 text-xs sm:text-sm font-semibold cursor-pointer text-center">
+                    <span>📁</span>
+                    <span>{isHindi ? "फोटो अपलोड" : "Upload Photo"}</span>
+                    <input
+                      type="file"
+                      accept="image/*"
+                      className="sr-only"
+                      onChange={(event) => {
+                        const file = event.currentTarget.files?.[0];
+                        if (file) {
+                          setSelectedModalScene(c.id as "modi" | "yogi" | "bjp");
+                          setBoothOpen(true);
+                          void choosePhoto(file);
+                        }
+                        event.currentTarget.value = "";
+                      }}
+                    />
+                  </label>
+                )}
+
+                <Link
+                  to="/experience/$scene"
+                  params={{ scene: c.id }}
+                  search={boothMode ? { mode: "booth" } : undefined}
+                  onClick={() =>
+                    localStorage.setItem("zuitar.deviceMode", boothMode ? "booth" : "personal")
+                  }
+                  className="zt-btn-ghost border border-border flex items-center justify-center gap-1 py-2.5 text-xs sm:text-sm font-semibold text-center"
+                >
+                  <span>🎥</span>
+                  <span>{isHindi ? "वीडियो" : "Video"}</span>
+                </Link>
               </div>
             </div>
           </div>
@@ -506,213 +559,281 @@ function Home() {
 
             <div className="mt-5 flex flex-wrap justify-center gap-3">
               {photo ? (
-                <>
-                  <button
-                    onClick={() => {
-                      setPhoto(null);
-                      setAiPhoto(null);
-                      setShowAi(false);
-                      setAiError(null);
-                      setCameraError(null);
-                    }}
-                    className="zt-btn-ghost"
-                  >
-                    {isHindi ? "दोबारा लें" : "Retake"}
-                  </button>
-                  <a
-                    href={displayedPhoto ?? photo}
-                    download={showAi ? "zuitar-ai-photo.jpg" : "zuitar-photo-booth.jpg"}
-                    className="zt-btn-primary"
-                  >
-                    {isHindi ? "डाउनलोड" : "Download photo"}
-                  </a>
-                  <div className="flex w-full flex-col gap-3 border-t border-border pt-4">
-                    <p className="w-full text-center text-xs font-semibold uppercase tracking-wider text-muted-foreground">
-                      {isHindi
-                        ? "AI अनुभव चुनें (Features with Icons & Text):"
-                        : "Choose AI Experience:"}
+                modalQr ? (
+                  <div className="flex flex-col items-center gap-3 rounded-2xl bg-card p-5 text-center w-full">
+                    <span className="text-3xl">📱</span>
+                    <p className="text-xl font-bold">
+                      {isHindi ? "फ़ोन से QR कोड स्कैन करें" : "Scan QR with your phone"}
                     </p>
-
-                    {/* PM Narendra Modi Options */}
-                    <div className="rounded-2xl border border-border/80 bg-background/50 p-3">
-                      <div className="flex items-center gap-2 mb-2">
-                        <img
-                          src="/assets/modi.png"
-                          alt="PM Modi"
-                          className="h-6 w-6 rounded-full object-cover border border-primary/50"
-                        />
-                        <span className="text-xs font-bold text-primary uppercase">
-                          {isHindi
-                            ? "प्रधानमंत्री नरेंद्र मोदी जी के साथ"
-                            : "PM Narendra Modi Features"}
-                        </span>
-                      </div>
-                      <div className="flex flex-wrap gap-2">
-                        <button
-                          onClick={() => void enhancePhoto("modi", "selfie")}
-                          disabled={aiBusy}
-                          className="zt-btn-secondary text-xs sm:text-sm disabled:opacity-50 flex items-center gap-1.5"
-                        >
-                          <span>🤳</span>
-                          <span>{isHindi ? "मोदी जी से सेल्फी" : "Selfie with Modi"}</span>
-                        </button>
-                        <button
-                          onClick={() => void enhancePhoto("modi", "handshake")}
-                          disabled={aiBusy}
-                          className="zt-btn-secondary text-xs sm:text-sm disabled:opacity-50 flex items-center gap-1.5"
-                        >
-                          <span>🤝</span>
-                          <span>{isHindi ? "मोदी जी से हाथ मिलाएँ" : "Handshake with Modi"}</span>
-                        </button>
-                        <button
-                          onClick={() => void enhancePhoto("modi", "hug")}
-                          disabled={aiBusy}
-                          className="zt-btn-secondary text-xs sm:text-sm disabled:opacity-50 flex items-center gap-1.5"
-                        >
-                          <span>🫂</span>
-                          <span>{isHindi ? "मोदी जी से गले मिलें" : "Hug with Modi"}</span>
-                        </button>
-                        <button
-                          onClick={() => void enhancePhoto("modi", "meeting")}
-                          disabled={aiBusy}
-                          className="zt-btn-secondary text-xs sm:text-sm disabled:opacity-50 flex items-center gap-1.5"
-                        >
-                          <span>💬</span>
-                          <span>{isHindi ? "मोदी जी से मुलाक़ात" : "Meeting with Modi"}</span>
-                        </button>
-                        <button
-                          onClick={() => void enhancePhoto("modi", "scarf")}
-                          disabled={aiBusy}
-                          className="zt-btn-secondary text-xs sm:text-sm disabled:opacity-50 flex items-center gap-1.5"
-                        >
-                          <span>🧣</span>
-                          <span>{isHindi ? "अंगवस्त्र सम्मान" : "Saffron Scarf Honor"}</span>
-                        </button>
-                      </div>
-                    </div>
-
-                    {/* CM Yogi Adityanath Options */}
-                    <div className="rounded-2xl border border-border/80 bg-background/50 p-3">
-                      <div className="flex items-center gap-2 mb-2">
-                        <img
-                          src="/assets/yogi.png"
-                          alt="CM Yogi"
-                          className="h-6 w-6 rounded-full object-cover border border-warning/50"
-                        />
-                        <span className="text-xs font-bold text-warning uppercase">
-                          {isHindi
-                            ? "मुख्यमंत्री योगी आदित्यनाथ जी के साथ"
-                            : "CM Yogi Adityanath Features"}
-                        </span>
-                      </div>
-                      <div className="flex flex-wrap gap-2">
-                        <button
-                          onClick={() => void enhancePhoto("yogi", "selfie")}
-                          disabled={aiBusy}
-                          className="zt-btn-secondary text-xs sm:text-sm disabled:opacity-50 flex items-center gap-1.5"
-                        >
-                          <span>🤳</span>
-                          <span>{isHindi ? "योगी जी से सेल्फी" : "Selfie with Yogi"}</span>
-                        </button>
-                        <button
-                          onClick={() => void enhancePhoto("yogi", "handshake")}
-                          disabled={aiBusy}
-                          className="zt-btn-secondary text-xs sm:text-sm disabled:opacity-50 flex items-center gap-1.5"
-                        >
-                          <span>🤝</span>
-                          <span>{isHindi ? "योगी जी से हाथ मिलाएँ" : "Handshake with Yogi"}</span>
-                        </button>
-                        <button
-                          onClick={() => void enhancePhoto("yogi", "hug")}
-                          disabled={aiBusy}
-                          className="zt-btn-secondary text-xs sm:text-sm disabled:opacity-50 flex items-center gap-1.5"
-                        >
-                          <span>🫂</span>
-                          <span>{isHindi ? "योगी जी से गले मिलें" : "Hug with Yogi"}</span>
-                        </button>
-                        <button
-                          onClick={() => void enhancePhoto("yogi", "meeting")}
-                          disabled={aiBusy}
-                          className="zt-btn-secondary text-xs sm:text-sm disabled:opacity-50 flex items-center gap-1.5"
-                        >
-                          <span>💬</span>
-                          <span>{isHindi ? "योगी जी से मुलाक़ात" : "Meeting with Yogi"}</span>
-                        </button>
-                        <button
-                          onClick={() => void enhancePhoto("yogi", "scarf")}
-                          disabled={aiBusy}
-                          className="zt-btn-secondary text-xs sm:text-sm disabled:opacity-50 flex items-center gap-1.5"
-                        >
-                          <span>🧣</span>
-                          <span>{isHindi ? "अंगवस्त्र सम्मान" : "Saffron Scarf Honor"}</span>
-                        </button>
-                      </div>
-                    </div>
-
-                    {/* BJP Look Options */}
-                    <div className="rounded-2xl border border-border/80 bg-background/50 p-3">
-                      <div className="flex items-center gap-2 mb-2">
-                        <img
-                          src="/assets/bjp.png"
-                          alt="BJP Lotus"
-                          className="h-6 w-6 rounded-full object-contain border border-leaf/50"
-                        />
-                        <span className="text-xs font-bold text-leaf uppercase">
-                          {isHindi ? "भाजपा लुक व स्टाइल" : "BJP Look & Styling"}
-                        </span>
-                      </div>
-                      <div className="flex flex-wrap gap-2">
-                        <button
-                          onClick={() => void enhancePhoto("bjp", "selfie")}
-                          disabled={aiBusy}
-                          className="zt-btn-secondary text-xs sm:text-sm disabled:opacity-50 flex items-center gap-1.5"
-                        >
-                          <span>🪷</span>
-                          <span>{isHindi ? "भाजपा कमल लुक" : "BJP Lotus Look"}</span>
-                        </button>
-                        <button
-                          onClick={() => void enhancePhoto("bjp", "scarf")}
-                          disabled={aiBusy}
-                          className="zt-btn-secondary text-xs sm:text-sm disabled:opacity-50 flex items-center gap-1.5"
-                        >
-                          <span>🧣</span>
-                          <span>{isHindi ? "टोपी व पटका लुक" : "Cap & Scarf Look"}</span>
-                        </button>
-                        <button
-                          onClick={() => void enhancePhoto("photo", "selfie")}
-                          disabled={aiBusy}
-                          className="zt-btn-secondary text-xs sm:text-sm disabled:opacity-50 flex items-center gap-1.5"
-                        >
-                          <span>✦</span>
-                          <span>{isHindi ? "फोटो सुधारें" : "Photo Enhance"}</span>
-                        </button>
-                      </div>
+                    <p className="text-xs text-muted-foreground">
+                      {isHindi
+                        ? "कैमरा खोलकर स्कैन करें, फ़ोटो आपके फ़ोन में खुल जाएगी और डाउनलोड हो जाएगी।"
+                        : "Open your mobile camera to scan and download the photo to your phone."}
+                    </p>
+                    <img
+                      src={modalQr}
+                      alt="QR code to download your photo"
+                      className="w-64 rounded-xl bg-foreground p-3 lg:w-72 shadow-lg"
+                    />
+                    <p className="text-xs text-muted-foreground">{t.expires}</p>
+                    <div className="flex gap-2 mt-2">
+                      <button onClick={() => setModalQr(null)} className="zt-btn-ghost">
+                        ✕ {t.close}
+                      </button>
+                      <button
+                        onClick={() => {
+                          setPhoto(null);
+                          setAiPhoto(null);
+                          setShowAi(false);
+                          setModalQr(null);
+                          setAiError(null);
+                          setCameraError(null);
+                        }}
+                        className="zt-btn-secondary"
+                      >
+                        🔄 {isHindi ? "दोबारा लें" : "Retake"}
+                      </button>
                     </div>
                   </div>
-                  {dev && demoAiReady && (
-                    <button
-                      onClick={() => void enhancePhoto("demo", "selfie")}
-                      disabled={aiBusy}
-                      className="zt-btn-secondary disabled:opacity-50"
-                    >
-                      {isHindi ? "✦ TEST: काल्पनिक AI सेल्फी" : "✦ TEST: Fictional AI selfie"}
-                    </button>
-                  )}
-                  {aiPhoto && (
-                    <button
-                      onClick={() => setShowAi((value) => !value)}
-                      className="zt-btn-secondary"
-                    >
-                      {showAi
-                        ? isHindi
-                          ? "Original दिखाएँ"
-                          : "Show original"
-                        : isHindi
-                          ? "AI photo दिखाएँ"
-                          : "Show AI photo"}
-                    </button>
-                  )}
-                </>
+                ) : (
+                  <>
+                    <div className="flex flex-wrap items-center justify-center gap-2 w-full">
+                      <button
+                        onClick={() => {
+                          setPhoto(null);
+                          setAiPhoto(null);
+                          setShowAi(false);
+                          setModalQr(null);
+                          setAiError(null);
+                          setCameraError(null);
+                        }}
+                        className="zt-btn-ghost text-xs sm:text-sm"
+                      >
+                        🔄 {isHindi ? "दोबारा लें" : "Retake"}
+                      </button>
+
+                      {!boothMode ? (
+                        <>
+                          <a
+                            href={displayedPhoto ?? photo}
+                            download={showAi ? "zuitar-ai-photo.jpg" : "zuitar-photo-booth.jpg"}
+                            className="zt-btn-primary text-xs sm:text-sm flex items-center gap-1.5"
+                          >
+                            <span>⬇️</span>
+                            <span>{isHindi ? "डाउनलोड" : "Download photo"}</span>
+                          </a>
+                          <button
+                            onClick={() => void makeModalQrWithPhoto()}
+                            disabled={modalQrBusy}
+                            className="zt-btn-secondary text-xs sm:text-sm flex items-center gap-1.5"
+                          >
+                            <span>📱</span>
+                            <span>{modalQrBusy ? "..." : (isHindi ? "QR कोड" : "Scan QR")}</span>
+                          </button>
+                        </>
+                      ) : (
+                        <button
+                          onClick={() => void makeModalQrWithPhoto()}
+                          disabled={modalQrBusy}
+                          className="zt-btn-primary text-xs sm:text-sm flex items-center gap-1.5 px-4 py-2 font-bold"
+                        >
+                          <span>📱</span>
+                          <span>
+                            {modalQrBusy
+                              ? "..."
+                              : (isHindi ? "फ़ोन में डाउनलोड (QR स्कैन)" : "Download to Phone (QR)")}
+                          </span>
+                        </button>
+                      )}
+
+                      {aiPhoto && (
+                        <button
+                          onClick={() => setShowAi((value) => !value)}
+                          className="zt-btn-ghost border border-border text-xs sm:text-sm"
+                        >
+                          {showAi
+                            ? (isHindi ? "असली फ़ोटो देखें" : "Show original")
+                            : (isHindi ? "AI फ़ोटो देखें" : "Show AI photo")}
+                        </button>
+                      )}
+                    </div>
+
+                    <div className="flex w-full flex-col gap-3 border-t border-border pt-4">
+                      <div className="flex items-center justify-between">
+                        <p className="text-xs font-bold uppercase tracking-wider text-primary">
+                          {isHindi
+                            ? "फीचर चुनें (Meeting, Selfie, Handshake, Scarf, Gift):"
+                            : "Choose Feature (Meeting, Selfie, Handshake, Scarf, Gift):"}
+                        </p>
+                      </div>
+
+                      {/* Scene / Leader Tabs */}
+                      <div className="flex rounded-xl border border-border bg-background/50 p-1 text-xs">
+                        <button
+                          type="button"
+                          onClick={() => setSelectedModalScene("modi")}
+                          className={`flex-1 rounded-lg py-2 font-semibold transition-all flex items-center justify-center gap-1.5 ${
+                            selectedModalScene === "modi"
+                              ? "bg-primary text-primary-foreground shadow"
+                              : "text-muted-foreground hover:text-foreground"
+                          }`}
+                        >
+                          <img src="/assets/modi.png" alt="Modi" className="h-4 w-4 rounded-full object-cover" />
+                          <span>{isHindi ? "पीएम मोदी" : "PM Modi"}</span>
+                        </button>
+                        <button
+                          type="button"
+                          onClick={() => setSelectedModalScene("yogi")}
+                          className={`flex-1 rounded-lg py-2 font-semibold transition-all flex items-center justify-center gap-1.5 ${
+                            selectedModalScene === "yogi"
+                              ? "bg-primary text-primary-foreground shadow"
+                              : "text-muted-foreground hover:text-foreground"
+                          }`}
+                        >
+                          <img src="/assets/yogi.png" alt="Yogi" className="h-4 w-4 rounded-full object-cover" />
+                          <span>{isHindi ? "सीएम योगी" : "CM Yogi"}</span>
+                        </button>
+                        <button
+                          type="button"
+                          onClick={() => setSelectedModalScene("bjp")}
+                          className={`flex-1 rounded-lg py-2 font-semibold transition-all flex items-center justify-center gap-1.5 ${
+                            selectedModalScene === "bjp"
+                              ? "bg-primary text-primary-foreground shadow"
+                              : "text-muted-foreground hover:text-foreground"
+                          }`}
+                        >
+                          <img src="/assets/bjp.png" alt="BJP" className="h-4 w-4 rounded-full object-contain" />
+                          <span>{isHindi ? "भाजपा लुक" : "BJP Look"}</span>
+                        </button>
+                      </div>
+
+                      {/* Options Grid for Selected Leader */}
+                      <div className="grid grid-cols-2 gap-2 max-h-[30vh] overflow-y-auto pr-1">
+                        {selectedModalScene === "modi" && (
+                          <>
+                            {[
+                              { id: "selfie", icon: "🤳", label: { en: "Selfie with Modi", hi: "मोदी जी से सेल्फी" } },
+                              { id: "handshake", icon: "🤝", label: { en: "Handshake with Modi", hi: "मोदी जी से हाथ मिलाएँ" } },
+                              { id: "hug", icon: "🫂", label: { en: "Hug with Modi", hi: "मोदी जी से गले मिलें" } },
+                              { id: "meeting", icon: "💬", label: { en: "Meeting with Modi", hi: "मोदी जी से मुलाक़ात" } },
+                              { id: "scarf", icon: "🧣", label: { en: "Saffron Scarf", hi: "अंगवस्त्र सम्मान" } },
+                              { id: "gift", icon: "🎁", label: { en: "Gift / Memento", hi: "उपहार / स्मृति चिन्ह भेंट" } },
+                            ].map((opt) => (
+                              <button
+                                key={opt.id}
+                                type="button"
+                                onClick={() => setSelectedModalInteraction(opt.id)}
+                                disabled={aiBusy}
+                                className={`flex items-center justify-between rounded-xl border p-2.5 text-xs sm:text-sm font-medium transition-all ${
+                                  selectedModalInteraction === opt.id
+                                    ? "border-primary bg-primary/15 text-primary font-bold ring-2 ring-primary/40"
+                                    : "border-border/60 hover:bg-muted text-foreground"
+                                } disabled:opacity-50`}
+                              >
+                                <span className="flex items-center gap-2">
+                                  <span className="text-base sm:text-lg">{opt.icon}</span>
+                                  <span>{opt.label[lang]}</span>
+                                </span>
+                                {selectedModalInteraction === opt.id && (
+                                  <span className="text-[10px] font-bold text-primary">✓</span>
+                                )}
+                              </button>
+                            ))}
+                          </>
+                        )}
+
+                        {selectedModalScene === "yogi" && (
+                          <>
+                            {[
+                              { id: "selfie", icon: "🤳", label: { en: "Selfie with Yogi", hi: "योगी जी से सेल्फी" } },
+                              { id: "handshake", icon: "🤝", label: { en: "Handshake with Yogi", hi: "योगी जी से हाथ मिलाएँ" } },
+                              { id: "hug", icon: "🫂", label: { en: "Hug with Yogi", hi: "योगी जी से गले मिलें" } },
+                              { id: "meeting", icon: "💬", label: { en: "Meeting with Yogi", hi: "योगी जी से मुलाक़ात" } },
+                              { id: "scarf", icon: "🧣", label: { en: "Saffron Scarf", hi: "अंगवस्त्र सम्मान" } },
+                              { id: "gift", icon: "🎁", label: { en: "Gift / Memento", hi: "उपहार / स्मृति चिन्ह भेंट" } },
+                            ].map((opt) => (
+                              <button
+                                key={opt.id}
+                                type="button"
+                                onClick={() => setSelectedModalInteraction(opt.id)}
+                                disabled={aiBusy}
+                                className={`flex items-center justify-between rounded-xl border p-2.5 text-xs sm:text-sm font-medium transition-all ${
+                                  selectedModalInteraction === opt.id
+                                    ? "border-primary bg-primary/15 text-primary font-bold ring-2 ring-primary/40"
+                                    : "border-border/60 hover:bg-muted text-foreground"
+                                } disabled:opacity-50`}
+                              >
+                                <span className="flex items-center gap-2">
+                                  <span className="text-base sm:text-lg">{opt.icon}</span>
+                                  <span>{opt.label[lang]}</span>
+                                </span>
+                                {selectedModalInteraction === opt.id && (
+                                  <span className="text-[10px] font-bold text-primary">✓</span>
+                                )}
+                              </button>
+                            ))}
+                          </>
+                        )}
+
+                        {selectedModalScene === "bjp" && (
+                          <>
+                            {[
+                              { id: "selfie", icon: "🪷", label: { en: "BJP Lotus Look", hi: "भाजपा कमल लुक" } },
+                              { id: "scarf", icon: "🧣", label: { en: "Cap & Scarf Look", hi: "टोपी व पटका लुक" } },
+                              { id: "gift", icon: "🎁", label: { en: "Ceremonial Memento", hi: "स्मृति चिन्ह व सम्मान" } },
+                              { id: "event", icon: "🚩", label: { en: "BJP Flag Style", hi: "भाजपा ध्वज लुक" } },
+                            ].map((opt) => (
+                              <button
+                                key={opt.id}
+                                type="button"
+                                onClick={() => setSelectedModalInteraction(opt.id)}
+                                disabled={aiBusy}
+                                className={`flex items-center justify-between rounded-xl border p-2.5 text-xs sm:text-sm font-medium transition-all ${
+                                  selectedModalInteraction === opt.id
+                                    ? "border-primary bg-primary/15 text-primary font-bold ring-2 ring-primary/40"
+                                    : "border-border/60 hover:bg-muted text-foreground"
+                                } disabled:opacity-50`}
+                              >
+                                <span className="flex items-center gap-2">
+                                  <span className="text-base sm:text-lg">{opt.icon}</span>
+                                  <span>{opt.label[lang]}</span>
+                                </span>
+                                {selectedModalInteraction === opt.id && (
+                                  <span className="text-[10px] font-bold text-primary">✓</span>
+                                )}
+                              </button>
+                            ))}
+                          </>
+                        )}
+                      </div>
+
+                      {/* Primary Generate Button */}
+                      <button
+                        type="button"
+                        onClick={() => void enhancePhoto(selectedModalScene, selectedModalInteraction)}
+                        disabled={aiBusy}
+                        className="zt-btn-primary mt-1 py-3 text-base font-bold flex items-center justify-center gap-2 w-full shadow-lg"
+                      >
+                        <span>✦</span>
+                        <span>
+                          {aiBusy
+                            ? (isHindi ? "AI फोटो तैयार कर रहा है…" : "Generating AI Photo…")
+                            : (isHindi ? "AI फ़ोटो बनाएँ (Generate)" : "Generate AI Photo ✦")}
+                        </span>
+                      </button>
+
+                      {dev && demoAiReady && (
+                        <button
+                          onClick={() => void enhancePhoto("demo", "selfie")}
+                          disabled={aiBusy}
+                          className="zt-btn-secondary disabled:opacity-50 text-xs"
+                        >
+                          {isHindi ? "✦ TEST: काल्पनिक AI सेल्फी" : "✦ TEST: Fictional AI selfie"}
+                        </button>
+                      )}
+                    </div>
+                  </>
+                )
               ) : (
                 <>
                   <button

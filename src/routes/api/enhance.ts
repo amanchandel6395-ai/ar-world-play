@@ -27,6 +27,9 @@ export function getEnhancePrompt(scene: string, interaction: string, cfg: AppCon
     if (interaction === "scarf") {
       return "From this customer photo, create a realistic, photorealistic, high quality photo of Prime Minister Narendra Modi presenting a traditional ceremonial saffron scarf (angavastram / uttariya) to the customer in a gesture of honor and respect. Keep the customer's exact face, expression, and identity preserved. Prime Minister Narendra Modi is smiling warmly, holding or draping the saffron stole. Dignified ceremonial lighting and background.";
     }
+    if (interaction === "gift") {
+      return "From this customer photo, create a realistic, photorealistic, high quality photo of the customer presenting a ceremonial gift or traditional flower bouquet / memento to Prime Minister Narendra Modi, with the Prime Minister accepting it with a warm welcoming smile. Keep the customer's exact face, expression, and identity preserved. Prime Minister Narendra Modi is styled authentically with neat white beard, spectacles, and traditional elegant kurta jacket. Dignified ceremonial event lighting and background.";
+    }
     return "From this customer photo, create a realistic, photorealistic, high quality photo of Prime Minister Narendra Modi standing beside the customer smiling and greeting with folded hands in namaste / posing together for a selfie. Keep the customer's exact face and identity preserved. Prime Minister Narendra Modi in his signature kurta jacket and spectacles. Warm natural lighting.";
   }
 
@@ -36,6 +39,9 @@ export function getEnhancePrompt(scene: string, interaction: string, cfg: AppCon
     }
     if (interaction === "scarf") {
       return "From this customer photo, create a realistic, photorealistic, high quality photo of Chief Minister Yogi Adityanath presenting a ceremonial saffron scarf / stole to the customer in honor and welcome. Chief Minister Yogi Adityanath in his traditional saffron robes, warm respectful expression. Keep the customer's exact identity and face preserved.";
+    }
+    if (interaction === "gift") {
+      return "From this customer photo, create a realistic, photorealistic, high quality photo of the customer presenting a ceremonial gift, flower bouquet, or traditional memento to Chief Minister Yogi Adityanath, with the Chief Minister accepting it with a warm welcoming smile. Chief Minister Yogi Adityanath in his traditional saffron robes, warm respectful expression. Keep the customer's exact face and identity preserved.";
     }
     if (interaction === "handshake") {
       return "From this customer photo, create a realistic, photorealistic, high quality photo of Chief Minister Yogi Adityanath shaking hands warmly with the customer. Chief Minister Yogi Adityanath in his traditional saffron attire. Keep the customer's exact face, hair, and identity preserved.";
