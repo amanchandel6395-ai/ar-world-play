@@ -55,7 +55,10 @@ export function Experience({ sceneId }: { sceneId: SceneId }) {
   }, [fetchConfig]);
 
   useEffect(() => {
-    setBoothMode(localStorage.getItem("zuitar.deviceMode") === "booth");
+    setBoothMode(
+      new URLSearchParams(window.location.search).get("mode") === "booth" ||
+        localStorage.getItem("zuitar.deviceMode") === "booth",
+    );
     detectCapabilities().then(setCaps);
     loadConfig();
   }, [loadConfig]);

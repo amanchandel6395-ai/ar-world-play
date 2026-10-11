@@ -69,7 +69,9 @@ export function ResultView({
         ? t.aiCredits
         : code === "busy" || code === "rate_limit"
           ? t.aiBusy
-          : code === "denied"
+          : code === "not_allowed"
+        ? t.aiLeaderUnavailable
+        : code === "denied"
             ? t.aiDenied
             : code === "rejected" || code === "invalid"
               ? t.aiRejected
@@ -292,15 +294,17 @@ export function ResultView({
                     {t.aiGenerated}
                   </span>
                 </div>
-                <a
-                  href={video.url}
-                  download="zuitar-ai-video.mp4"
-                  target="_blank"
-                  rel="noreferrer"
-                  className="zt-btn-secondary text-center"
-                >
-                  {t.downloadVideo}
-                </a>
+                {!boothMode && (
+                  <a
+                    href={video.url}
+                    download="zuitar-ai-video.mp4"
+                    target="_blank"
+                    rel="noreferrer"
+                    className="zt-btn-secondary text-center"
+                  >
+                    {t.downloadVideo}
+                  </a>
+                )}
               </div>
             )}
             {videoMsg && <p className="text-center text-destructive">{videoMsg}</p>}

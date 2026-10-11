@@ -327,6 +327,10 @@ export async function handleEnhanceRequest(request: Request): Promise<Response> 
     return Response.json({ code: "invalid" }, { status: 400 });
   }
 
+  if (scene === "yogi" || scene === "modi") {
+    return Response.json({ code: "not_allowed" }, { status: 403 });
+  }
+
   const { loadConfig } = await import("@/lib/config.server");
   const cfg = await loadConfig();
   if (scene === "demo" ? !cfg.demo.enabled : !cfg.ai.imageEnabled) {

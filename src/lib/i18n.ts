@@ -72,6 +72,7 @@ const en = {
   aiCredits: "AI credits are used up. Ask the booth staff.",
   aiBusy: "Too many requests. Please wait a moment.",
   aiDenied: "The AI service key is invalid or not allowed. Ask the booth staff.",
+  aiLeaderUnavailable: "AI cannot create a realistic interaction with a real leader. Use the labeled photo-booth cutout instead.",
   aiRejected: "The AI service could not use this photo. Try another photo.",
   aiNetwork: "The AI service did not respond in time. Please try again.",
   showOriginal: "Original",
@@ -185,6 +186,7 @@ const hi: Dict = {
   aiCredits: "AI क्रेडिट खत्म हो गए। बूथ स्टाफ़ से पूछें।",
   aiBusy: "बहुत ज़्यादा अनुरोध। थोड़ा रुकें।",
   aiDenied: "AI सेवा की कुंजी गलत है या अनुमति नहीं है। बूथ स्टाफ़ से पूछें।",
+  aiLeaderUnavailable: "AI किसी वास्तविक नेता के साथ असली जैसी मुलाक़ात नहीं बना सकता। लेबल वाले फोटो-बूथ कटआउट का उपयोग करें।"
   aiRejected: "AI सेवा इस फ़ोटो का उपयोग नहीं कर सकी। दूसरी फ़ोटो आज़माएँ।",
   aiNetwork: "AI सेवा ने समय पर जवाब नहीं दिया। फिर कोशिश करें।",
   showOriginal: "असली",
