@@ -67,9 +67,15 @@ export function ResultView({
         ? t.aiCredits
         : code === "busy" || code === "rate_limit"
           ? t.aiBusy
-          : kind === "ai"
-            ? t.aiFail
-            : t.videoFail;
+          : code === "denied"
+            ? t.aiDenied
+            : code === "rejected" || code === "invalid"
+              ? t.aiRejected
+              : code === "network"
+                ? t.aiNetwork
+                : kind === "ai"
+                  ? t.aiFail
+                  : t.videoFail;
   useIdleReset(KIOSK.resultTimeoutMs, onHome);
 
   const current = showAi && aiPhoto ? aiPhoto : photo;

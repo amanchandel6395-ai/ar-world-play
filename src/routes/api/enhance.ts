@@ -449,7 +449,11 @@ export async function handleEnhanceRequest(request: Request): Promise<Response> 
           ? "denied"
           : finalCategory === "not_configured"
             ? "not_configured"
-            : "failed";
+            : finalCategory === "timeout" || finalCategory === "network_error"
+              ? "network"
+              : finalCategory === "bad_request" || finalCategory === "no_image_returned"
+                ? "rejected"
+                : "failed";
 
   logAiEvent("error", {
     event: "ai_all_providers_failed",

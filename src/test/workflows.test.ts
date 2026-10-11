@@ -207,7 +207,7 @@ describe("Workflow Tests: Complete Repository Repair & Features", () => {
       // Fallback triggers: response is structured failure code (403 denied, 429 busy, 502 failed, or 503)
       expect([403, 429, 502, 503]).toContain(res.status);
       const json = await res.json();
-      expect(["denied", "busy", "failed", "credits"]).toContain(json.code);
+      expect(["denied", "busy", "failed", "credits", "network", "rejected"]).toContain(json.code);
     } finally {
       globalThis.fetch = oldFetch;
       if (oldLovable) process.env["LOVABLE_API_KEY"] = oldLovable;
