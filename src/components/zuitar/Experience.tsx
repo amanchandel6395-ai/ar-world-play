@@ -277,13 +277,30 @@ export function Experience({ sceneId }: { sceneId: SceneId }) {
               </p>
             </div>
           ) : (
-            <button
-              onClick={() => setPhase("live")}
-              disabled={!config}
-              className="zt-btn-primary min-w-64 text-xl disabled:opacity-50"
-            >
-              {config ? t.startCamera : t.loading}
-            </button>
+            <div className="flex flex-col items-center gap-3">
+              <button
+                onClick={() => setPhase("live")}
+                disabled={!config}
+                className="zt-btn-primary min-w-64 text-xl disabled:opacity-50"
+              >
+                {config ? t.startCamera : t.loading}
+              </button>
+              <label className="zt-btn-ghost cursor-pointer">
+                {t.choosePhoto}
+                <input
+                  type="file"
+                  accept="image/*"
+                  className="sr-only"
+                  onChange={(e) => {
+                    const file = e.currentTarget.files?.[0];
+                    e.currentTarget.value = "";
+                    if (!file || !file.type.startsWith("image/")) return;
+                    setPhoto(file);
+                    setPhase("result");
+                  }}
+                />
+              </label>
+            </div>
           )}
           <div className="flex gap-3">
             <button onClick={goHome} className="zt-btn-ghost">
