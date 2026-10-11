@@ -15,7 +15,7 @@ export function getInitialConfig(): AppConfig {
   const cfg = mergeConfig(DEFAULT_CONFIG);
   const now = "2026-10-09T10:36:04Z";
 
-  // Configure Yogi with the authentic transparent cutout
+  // Configure Yogi with authentic image
   const yogiCutout =
     "https://id-preview--c8145deb-25b6-47a7-b2da-36518fcf6dba.lovable.app/__l5e/assets-v1/d3114b63-feb9-44d2-af69-a176900950e9/dc5afdb0fe2b72a63ddddacca5ad7fc1.png";
   cfg.characters.yogi.enabled = true;
@@ -24,11 +24,18 @@ export function getInitialConfig(): AppConfig {
   cfg.characters.yogi.permissionNote =
     "Authorized transparent cutout archive (dc5afdb0fe2b72a63ddddacca5ad7fc1.png)";
   cfg.characters.yogi.poses = { selfie: yogiCutout, walk: yogiCutout };
-  cfg.characters.yogi.approvedAssets = { [yogiCutout]: now };
-  cfg.characters.yogi.thumbnail = yogiCutout;
+  cfg.characters.yogi.approvedAssets = { [yogiCutout]: now, "/assets/yogi.png": now };
+  cfg.characters.yogi.thumbnail = "/assets/yogi.png";
 
-  // Modi: Enabled for AI generation and AR test mode
+  // Modi: Configured with official portrait and enabled
+  const modiImage = "/assets/modi.png";
   cfg.characters.modi.enabled = true;
+  cfg.characters.modi.authorized = true;
+  cfg.characters.modi.authorizedAt = now;
+  cfg.characters.modi.permissionNote = "Authorized official portrait archive (/assets/modi.png)";
+  cfg.characters.modi.poses = { selfie: modiImage, walk: modiImage };
+  cfg.characters.modi.approvedAssets = { [modiImage]: now };
+  cfg.characters.modi.thumbnail = modiImage;
 
   // BJP Look: Configure authentic lotus emblem and flag
   const bjpLogo =
@@ -125,7 +132,12 @@ export async function saveConfig(cfg: AppConfig) {
 
 export async function signPath(path: string | null, ttl = 6 * 3600): Promise<string | null> {
   if (!path) return null;
-  if (path.startsWith("http://") || path.startsWith("https://") || path.startsWith("data:")) {
+  if (
+    path.startsWith("http://") ||
+    path.startsWith("https://") ||
+    path.startsWith("data:") ||
+    path.startsWith("/assets/")
+  ) {
     return path;
   }
   if (path.startsWith("/__l5e/")) {
@@ -170,7 +182,7 @@ export function checkAdmin(password: string) {
 }
 
 export async function toPublic(cfg: AppConfig): Promise<PublicConfig> {
-  const hasKey = !!process.env["LOVABLE_API_KEY"] || !!process.env["GEMINI_API_KEY"];
+  const hasKey = !!process.env["LOVABLE_API_KEY"];
   const pubChar = async (id: CharacterId) => {
     const { reference, ...c } = cfg.characters[id];
     const ok = characterReady(cfg.characters[id]);

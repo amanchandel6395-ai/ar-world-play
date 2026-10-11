@@ -18,11 +18,10 @@ async function toBase64(b: Blob) {
 export function ResultView({
   photo,
   sceneId,
-  interaction,
+  interaction: initialInteraction,
   allowAi,
   allowVideo,
   videoConfigured,
-  boothMode,
   onRetake,
   onHome,
 }: {
@@ -33,10 +32,10 @@ export function ResultView({
   allowVideo: boolean;
   /** admin switched video on but it has not passed an end-to-end test yet */
   videoConfigured?: boolean;
-  boothMode: boolean;
   onRetake: () => void;
   onHome: () => void;
 }) {
+  const [selectedInteraction, setSelectedInteraction] = useState<InteractionId>(initialInteraction);
   const [aiPhoto, setAiPhoto] = useState<Blob | null>(null);
   const [showAi, setShowAi] = useState(false);
   const [aiBusy, setAiBusy] = useState(false);
@@ -44,7 +43,63 @@ export function ResultView({
   const [qr, setQr] = useState<string | null>(null);
   const [qrBusy, setQrBusy] = useState(false);
   const share = useServerFn(createShare);
-  const [, , t] = useLang();
+  const [lang, , t] = useLang();
+  const isHindi = lang === "hi";
+
+  const sceneOptions: Array<{
+    id: InteractionId;
+    icon: string;
+    label: { en: string; hi: string };
+  }> =
+    sceneId === "modi"
+      ? [
+          {
+            id: "selfie",
+            icon: "🤳",
+            label: { en: "Selfie with PM Modi", hi: "पीएम मोदी जी के साथ सेल्फ़ी" },
+          },
+          {
+            id: "handshake",
+            icon: "🤝",
+            label: { en: "Handshake with Modi", hi: "मोदी जी से हाथ मिलाएँ" },
+          },
+          { id: "hug", icon: "🫂", label: { en: "Hug with Modi", hi: "मोदी जी से गले मिलें" } },
+          {
+            id: "meeting",
+            icon: "💬",
+            label: { en: "Meeting with Modi", hi: "मोदी जी से मुलाक़ात" },
+          },
+          { id: "scarf", icon: "🧣", label: { en: "Saffron Scarf Honor", hi: "अंगवस्त्र सम्मान" } },
+        ]
+      : sceneId === "yogi"
+        ? [
+            {
+              id: "selfie",
+              icon: "🤳",
+              label: { en: "Selfie with CM Yogi", hi: "सीएम योगी जी के साथ सेल्फ़ी" },
+            },
+            {
+              id: "handshake",
+              icon: "🤝",
+              label: { en: "Handshake with Yogi", hi: "योगी जी से हाथ मिलाएँ" },
+            },
+            { id: "hug", icon: "🫂", label: { en: "Hug with Yogi", hi: "योगी जी से गले मिलें" } },
+            {
+              id: "meeting",
+              icon: "💬",
+              label: { en: "Meeting with Yogi", hi: "योगी जी से मुलाक़ात" },
+            },
+            {
+              id: "scarf",
+              icon: "🧣",
+              label: { en: "Saffron Scarf Honor", hi: "अंगवस्त्र सम्मान" },
+            },
+          ]
+        : [
+            { id: "selfie", icon: "🪷", label: { en: "BJP Lotus Look", hi: "भाजपा कमल लुक" } },
+            { id: "scarf", icon: "🧣", label: { en: "BJP Cap & Scarf", hi: "भाजपा टोपी व पटका" } },
+            { id: "event", icon: "🚩", label: { en: "BJP Flag Style", hi: "भाजपा ध्वज लुक" } },
+          ];
   const [video, setVideo] = useState<{
     state: "idle" | "busy" | "ready";
     url?: string;
@@ -69,17 +124,9 @@ export function ResultView({
         ? t.aiCredits
         : code === "busy" || code === "rate_limit"
           ? t.aiBusy
-          : code === "not_allowed"
-        ? t.aiLeaderUnavailable
-        : code === "denied"
-            ? t.aiDenied
-            : code === "rejected" || code === "invalid"
-              ? t.aiRejected
-              : code === "network"
-                ? t.aiNetwork
-                : kind === "ai"
-                  ? t.aiFail
-                  : t.videoFail;
+          : kind === "ai"
+            ? t.aiFail
+            : t.videoFail;
   useIdleReset(KIOSK.resultTimeoutMs, onHome);
 
   const current = showAi && aiPhoto ? aiPhoto : photo;
@@ -109,14 +156,16 @@ export function ResultView({
     }
   };
 
-  const enhance = async () => {
+  const enhance = async (ix?: InteractionId) => {
+    const targetIx = ix ?? selectedInteraction;
+    if (ix) setSelectedInteraction(ix);
     setAiBusy(true);
     setMsg(null);
     try {
       const fd = new FormData();
       fd.append("image", photo, "capture.jpg");
-      fd.append("scene", sceneId === "yogi" || sceneId === "modi" ? "photo" : sceneId);
-      fd.append("interaction", interaction);
+      fd.append("scene", sceneId);
+      fd.append("interaction", targetIx);
       const res = await fetch("/api/enhance", { method: "POST", body: fd });
       if (!res.ok) {
         const j = (await res.json().catch(() => ({}))) as { code?: string };
@@ -207,7 +256,7 @@ export function ResultView({
       <div className="flex w-full flex-col gap-3 p-4 pb-8 lg:w-[26rem] lg:justify-center lg:p-8">
         {qr ? (
           <div className="flex flex-col items-center gap-3 rounded-2xl bg-card p-5 text-center">
-            <p className="text-xl font-bold">{boothMode ? t.scanQrPhone : t.scanQr}</p>
+            <p className="text-xl font-bold">Scan to get your photo</p>
             <img
               src={qr}
               alt="QR code to download your photo"
@@ -221,13 +270,11 @@ export function ResultView({
         ) : (
           <>
             <div className="grid grid-cols-2 gap-3">
-              {!boothMode && (
-                <button onClick={download} className="zt-btn-primary">
-                  {t.download}
-                </button>
-              )}
+              <button onClick={download} className="zt-btn-primary">
+                Download
+              </button>
               <button onClick={makeQr} disabled={qrBusy} className="zt-btn-secondary">
-                {qrBusy ? t.creating : t.qr}
+                {qrBusy ? "Creating…" : "Scan QR"}
               </button>
               <button onClick={onRetake} className="zt-btn-secondary">
                 Retake
@@ -236,19 +283,34 @@ export function ResultView({
                 Home
               </button>
             </div>
-            {(sceneId === "yogi" || sceneId === "modi") && (
-              <p className="rounded-xl border border-border bg-card/60 p-3 text-center text-sm text-muted-foreground">
-                {t.leaderAiNote}
-              </p>
-            )}
-            {allowAi && !aiPhoto && (
-              <button
-                onClick={enhance}
-                disabled={aiBusy}
-                className="zt-btn-ghost border border-border"
-              >
-                ✦ {sceneId === "bjp" ? t.bjpAiLabel : t.aiLabel}
-              </button>
+            {allowAi && (
+              <div className="flex flex-col gap-2 rounded-2xl border border-border bg-card/60 p-3">
+                <p className="text-xs font-semibold text-muted-foreground">
+                  {isHindi ? "अनुभव चुनें (Icons & Features):" : "Choose Experience Feature:"}
+                </p>
+                <div className="flex flex-col gap-1.5">
+                  {sceneOptions.map((opt) => (
+                    <button
+                      key={opt.id}
+                      onClick={() => void enhance(opt.id)}
+                      disabled={aiBusy}
+                      className={`flex items-center justify-between rounded-xl border px-3 py-2 text-sm font-medium transition-all ${
+                        selectedInteraction === opt.id
+                          ? "border-primary bg-primary/10 text-primary font-semibold"
+                          : "border-border/60 hover:bg-muted text-foreground"
+                      } disabled:opacity-50`}
+                    >
+                      <span className="flex items-center gap-2">
+                        <span className="text-lg">{opt.icon}</span>
+                        <span>{opt.label[lang]}</span>
+                      </span>
+                      <span className="text-xs font-bold text-primary">
+                        {aiBusy && selectedInteraction === opt.id ? "…" : "✦"}
+                      </span>
+                    </button>
+                  ))}
+                </div>
+              </div>
             )}
             {aiPhoto && (
               <button
@@ -294,17 +356,15 @@ export function ResultView({
                     {t.aiGenerated}
                   </span>
                 </div>
-                {!boothMode && (
-                  <a
-                    href={video.url}
-                    download="zuitar-ai-video.mp4"
-                    target="_blank"
-                    rel="noreferrer"
-                    className="zt-btn-secondary text-center"
-                  >
-                    {t.downloadVideo}
-                  </a>
-                )}
+                <a
+                  href={video.url}
+                  download="zuitar-ai-video.mp4"
+                  target="_blank"
+                  rel="noreferrer"
+                  className="zt-btn-secondary text-center"
+                >
+                  {t.downloadVideo}
+                </a>
               </div>
             )}
             {videoMsg && <p className="text-center text-destructive">{videoMsg}</p>}

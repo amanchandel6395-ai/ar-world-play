@@ -20,7 +20,6 @@ export function Experience({ sceneId }: { sceneId: SceneId }) {
   const goHome = useCallback(() => navigate({ to: "/" }), [navigate]);
   const [dev] = useDevMode();
   const [lang, setLang, t] = useLang();
-  const [boothMode, setBoothMode] = useState(false);
   const fetchConfig = useServerFn(getPublicConfig);
   const [config, setConfig] = useState<PublicConfig | null>(null);
   const [configError, setConfigError] = useState(false);
@@ -55,10 +54,6 @@ export function Experience({ sceneId }: { sceneId: SceneId }) {
   }, [fetchConfig]);
 
   useEffect(() => {
-    setBoothMode(
-      new URLSearchParams(window.location.search).get("mode") === "booth" ||
-        localStorage.getItem("zuitar.deviceMode") === "booth",
-    );
     detectCapabilities().then(setCaps);
     loadConfig();
   }, [loadConfig]);
@@ -111,6 +106,11 @@ export function Experience({ sceneId }: { sceneId: SceneId }) {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [phase, facing, scene, config]);
 
+  const pick = (id: InteractionId) => {
+    setInteraction(id);
+    engine.current?.setInteraction(id);
+  };
+
   const capture = () => {
     if (
       count > 0 ||
@@ -153,6 +153,41 @@ export function Experience({ sceneId }: { sceneId: SceneId }) {
     engine.current?.setSegmentation(v);
   };
 
+  const handleUploadPhoto = async (file?: File) => {
+    if (!file) return;
+    if (!file.type.startsWith("image/")) {
+      setError(lang === "hi" ? "कृपया image फ़ाइल चुनें।" : "Please choose an image file.");
+      return;
+    }
+    setPhoto(file);
+    setPhase("result");
+  };
+
+  const getInteractionLabel = (id: InteractionId, fallback: string) => {
+    if (sceneId === "modi") {
+      if (id === "selfie") return lang === "hi" ? "पीएम मोदी सेल्फ़ी" : "Selfie with PM Modi";
+      if (id === "handshake")
+        return lang === "hi" ? "मोदी जी से हाथ मिलाएँ" : "Handshake with Modi";
+      if (id === "hug") return lang === "hi" ? "मोदी जी से गले मिलें" : "Hug with Modi";
+      if (id === "meeting") return lang === "hi" ? "मोदी जी से मुलाक़ात" : "Meeting with Modi";
+      if (id === "scarf") return lang === "hi" ? "अंगवस्त्र सम्मान" : "Scarf Honor";
+    }
+    if (sceneId === "yogi") {
+      if (id === "selfie") return lang === "hi" ? "सीएम योगी सेल्फ़ी" : "Selfie with CM Yogi";
+      if (id === "handshake")
+        return lang === "hi" ? "योगी जी से हाथ मिलाएँ" : "Handshake with Yogi";
+      if (id === "hug") return lang === "hi" ? "योगी जी से गले मिलें" : "Hug with Yogi";
+      if (id === "meeting") return lang === "hi" ? "योगी जी से मुलाक़ात" : "Meeting with Yogi";
+      if (id === "scarf") return lang === "hi" ? "अंगवस्त्र सम्मान" : "Scarf Honor";
+    }
+    if (sceneId === "bjp") {
+      if (id === "selfie") return lang === "hi" ? "भाजपा कमल लुक" : "BJP Lotus Look";
+      if (id === "scarf") return lang === "hi" ? "टोपी व पटका" : "Cap & Scarf";
+      if (id === "event") return lang === "hi" ? "मंच व ध्वज" : "Stage & Flag";
+    }
+    return fallback;
+  };
+
   if (phase === "world" && config) {
     const build = scene.buildWorld;
     return (
@@ -170,15 +205,9 @@ export function Experience({ sceneId }: { sceneId: SceneId }) {
         photo={photo}
         sceneId={sceneId}
         interaction={interaction}
-        allowAi={Boolean(
-          config &&
-            config.ai.imageReady &&
-            config.ai.imageEnabled &&
-            (sceneId !== "bjp" || config.ready.bjp),
-        )}
+        allowAi={!!config?.ai.imageReady || !!config?.ai.imageEnabled}
         allowVideo={sceneId === "bjp" && !!config?.ai.videoReady}
         videoConfigured={sceneId === "bjp" && !!config?.ai.videoEnabled}
-        boothMode={boothMode}
         onRetake={() => {
           setPhoto(null);
           setPhase("live");
@@ -193,6 +222,7 @@ export function Experience({ sceneId }: { sceneId: SceneId }) {
   const ready = status?.engine && !error;
   const sceneReady = !!config?.ready[sceneId] || dev;
   const assetMissing = !sceneReady || (!!ready && !!engine.current?.standIn && !dev);
+  const interactions = config?.interactions.filter((i) => i.enabled) ?? [];
   const on = (b?: boolean) => (b ? "on" : "off") as "on" | "off";
   const rows: DebugRow[] = status
     ? [
@@ -262,7 +292,9 @@ export function Experience({ sceneId }: { sceneId: SceneId }) {
                 </span>
               ))}
           </div>
-          {configError ? (
+          {caps && !caps.camera ? (
+            <p className="max-w-md text-warning">{t.noCamera}</p>
+          ) : configError ? (
             <div className="flex flex-col items-center gap-3">
               <p className="max-w-md text-warning">{t.setupTitle}</p>
               <button onClick={loadConfig} className="zt-btn-primary min-w-64 text-xl">
@@ -279,35 +311,30 @@ export function Experience({ sceneId }: { sceneId: SceneId }) {
                 {sceneId === "bjp" ? t.setupBjp : t.setupChar}
               </p>
             </div>
-          ) : null}
-          {!caps?.camera && <p className="max-w-md text-warning">{t.noCamera}</p>}
-          {boothMode && <p className="max-w-md text-sm text-muted-foreground">{t.boothCameraOnly}</p>}
-          <div className="flex flex-col items-center gap-3">
-            <button
-              onClick={() => setPhase("live")}
-              disabled={!config || !sceneReady || !caps?.camera}
-              className="zt-btn-primary min-w-64 text-xl disabled:opacity-50"
-            >
-              {t.startCamera}
-            </button>
-            {!boothMode && (
-              <label className="zt-btn-ghost cursor-pointer">
-                {t.choosePhoto}
+          ) : (
+            <div className="flex flex-col sm:flex-row items-center gap-3">
+              <button
+                onClick={() => setPhase("live")}
+                disabled={!config}
+                className="zt-btn-primary min-w-56 text-lg sm:text-xl disabled:opacity-50"
+              >
+                📷 {config ? t.startCamera : t.loading}
+              </button>
+              <label className="zt-btn-secondary min-w-56 text-lg sm:text-xl flex items-center justify-center gap-2 cursor-pointer border border-border">
+                <span>📁</span>
+                <span>{lang === "hi" ? "फोटो अपलोड करें" : "Upload photo"}</span>
                 <input
                   type="file"
                   accept="image/*"
                   className="sr-only"
                   onChange={(e) => {
-                    const file = e.currentTarget.files?.[0];
+                    void handleUploadPhoto(e.currentTarget.files?.[0]);
                     e.currentTarget.value = "";
-                    if (!file || !file.type.startsWith("image/")) return;
-                    setPhoto(file);
-                    setPhase("result");
                   }}
                 />
               </label>
-            )}
-          </div>
+            </div>
+          )}
           <div className="flex gap-3">
             <button onClick={goHome} className="zt-btn-ghost">
               ← {t.back}
@@ -424,9 +451,46 @@ export function Experience({ sceneId }: { sceneId: SceneId }) {
 
           {/* bottom bar */}
           <div className="absolute inset-x-0 bottom-0 flex flex-col gap-3 bg-gradient-to-t from-background/85 to-transparent px-4 pb-[max(1.25rem,env(safe-area-inset-bottom))] pt-10">
-
+            {interactions.length > 1 && (
+              <div className="flex flex-col items-center gap-1">
+                <p className="text-xs text-muted-foreground">{t.pick}</p>
+                <div className="flex max-w-full gap-2 overflow-x-auto pb-1">
+                  {interactions.map((i) => (
+                    <button
+                      key={i.id}
+                      onClick={() => pick(i.id)}
+                      aria-pressed={interaction === i.id}
+                      className={`flex shrink-0 items-center gap-1.5 rounded-full border px-4 py-2 text-sm font-semibold ${
+                        interaction === i.id
+                          ? "border-primary bg-primary text-primary-foreground"
+                          : "border-border bg-overlay text-foreground"
+                      }`}
+                    >
+                      <span className="text-base">{i.icon}</span>
+                      <span>{getInteractionLabel(i.id, i.label[lang])}</span>
+                    </button>
+                  ))}
+                </div>
+              </div>
+            )}
             <div className="grid grid-cols-3 items-center">
-              <div />
+              <div className="flex justify-start">
+                <label
+                  className="zt-btn-round flex items-center justify-center cursor-pointer"
+                  title={lang === "hi" ? "फोटो अपलोड करें" : "Upload photo"}
+                >
+                  📁
+                  <input
+                    type="file"
+                    accept="image/*"
+                    className="sr-only"
+                    onChange={(e) => {
+                      void handleUploadPhoto(e.currentTarget.files?.[0]);
+                      e.currentTarget.value = "";
+                    }}
+                  />
+                </label>
+              </div>
               <div className="flex justify-center">
                 <button
                   onClick={capture}

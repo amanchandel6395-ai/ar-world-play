@@ -1,10 +1,8 @@
 import { createFileRoute } from "@tanstack/react-router";
 import { INTERACTIONS, type AppConfig } from "@/lib/config";
-import { GoogleGenAI } from "@google/genai";
 
 const LOVABLE_GATEWAY = "https://ai.gateway.lovable.dev";
 const LOVABLE_MODEL = "openai/gpt-image-2.5-sunburst";
-const GEMINI_MODEL = "gemini-3.1-flash-lite-image";
 export const SCENES: string[] = ["yogi", "modi", "bjp", "photo", "demo"];
 
 export function getEnhancePrompt(scene: string, interaction: string, cfg: AppConfig): string {
@@ -64,11 +62,11 @@ function logAiEvent(
     event: string;
     provider: string;
     scene: string;
-    interaction?: string | undefined;
-    category?: string | undefined;
-    status?: number | undefined;
-    fallbackTriggered?: boolean | undefined;
-    errorSummary?: string | undefined;
+    interaction?: string;
+    category?: string;
+    status?: number;
+    fallbackTriggered?: boolean;
+    errorSummary?: string;
   },
 ) {
   const payload = JSON.stringify({
@@ -189,113 +187,13 @@ async function callLovable(
   }
 }
 
-/** Call backup Google Gemini API provider. */
-async function callGemini(
-  key: string,
-  imageBlob: Blob,
-  prompt: string,
-  refBlob: Blob | null,
-): Promise<ProviderResult> {
-  try {
-    const ai = new GoogleGenAI({ apiKey: key });
-    const imageBytes = Buffer.from(await imageBlob.arrayBuffer());
-
-    const parts: Array<{ inlineData?: { data: string; mimeType: string }; text?: string }> = [
-      {
-        inlineData: {
-          data: imageBytes.toString("base64"),
-          mimeType: imageBlob.type || "image/jpeg",
-        },
-      },
-    ];
-
-    if (refBlob) {
-      const refBytes = Buffer.from(await refBlob.arrayBuffer());
-      parts.push({
-        inlineData: {
-          data: refBytes.toString("base64"),
-          mimeType: refBlob.type || "image/png",
-        },
-      });
-    }
-
-    parts.push({ text: prompt });
-
-    const callPromise = ai.models.generateContent({
-      model: GEMINI_MODEL,
-      contents: { parts },
-    });
-
-    const timeoutPromise = new Promise<never>((_, reject) => {
-      setTimeout(() => reject(new Error("Timeout after 45s")), 45000);
-    });
-
-    const response = await Promise.race([callPromise, timeoutPromise]);
-
-    let b64: string | null = null;
-    const candidates = response.candidates ?? [];
-    for (const cand of candidates) {
-      for (const part of cand.content?.parts ?? []) {
-        if (part.inlineData?.data) {
-          b64 = part.inlineData.data;
-          break;
-        }
-      }
-      if (b64) break;
-    }
-
-    if (!b64) {
-      return {
-        success: false,
-        category: "no_image_returned",
-        status: 502,
-        retryable: true,
-        message: "No image inlineData in Gemini response",
-      };
-    }
-
-    return { success: true, b64, category: "success", status: 200, retryable: false };
-  } catch (err: unknown) {
-    const msg = err instanceof Error ? err.message : String(err);
-    const isQuota =
-      msg.toLowerCase().includes("quota") ||
-      msg.toLowerCase().includes("credit") ||
-      msg.includes("BILLING");
-    const isRateLimit = !isQuota && (msg.includes("429") || msg.includes("RESOURCE_EXHAUSTED"));
-    const isAuth =
-      msg.includes("API key not valid") || msg.includes("PERMISSION_DENIED") || msg.includes("401");
-    const isTimeout = msg.includes("Timeout");
-
-    const category = isQuota
-      ? "quota"
-      : isRateLimit
-        ? "rate_limit"
-        : isAuth
-          ? "auth_error"
-          : isTimeout
-            ? "timeout"
-            : "server_error";
-    const status = isQuota ? 402 : isRateLimit ? 429 : isAuth ? 403 : isTimeout ? 504 : 502;
-    const retryable = isRateLimit || isTimeout;
-
-    return {
-      success: false,
-      category,
-      status,
-      retryable,
-      message: msg.slice(0, 160),
-    };
-  }
-}
-
 export async function handleEnhanceRequest(request: Request): Promise<Response> {
   const lovableKey = process.env["LOVABLE_API_KEY"];
-  const geminiKey = process.env["GEMINI_API_KEY"];
 
-  if (!lovableKey && !geminiKey) {
+  if (!lovableKey) {
     logAiEvent("warn", {
       event: "ai_not_configured",
-      provider: "none",
+      provider: "lovable",
       scene: "unknown",
       category: "not_configured",
       status: 503,
@@ -325,10 +223,6 @@ export async function handleEnhanceRequest(request: Request): Promise<Response> 
     !(INTERACTIONS as readonly string[]).includes(interaction)
   ) {
     return Response.json({ code: "invalid" }, { status: 400 });
-  }
-
-  if (scene === "yogi" || scene === "modi") {
-    return Response.json({ code: "not_allowed" }, { status: 403 });
   }
 
   const { loadConfig } = await import("@/lib/config.server");
@@ -361,89 +255,30 @@ export async function handleEnhanceRequest(request: Request): Promise<Response> 
     }
   }
 
-  // Determine provider order
-  const primaryProvider = (process.env["AI_PRIMARY_PROVIDER"] || "lovable").toLowerCase();
-  const providers: Array<"lovable" | "gemini"> =
-    primaryProvider === "gemini" ? ["gemini", "lovable"] : ["lovable", "gemini"];
-
-  let lastResult: ProviderResult | null = null;
-
-  for (let i = 0; i < providers.length; i++) {
-    const provider = providers[i];
-    const isPrimary = i === 0;
-
-    if (provider === "lovable") {
-      if (!lovableKey) {
-        lastResult = {
-          success: false,
-          category: "not_configured",
-          status: 503,
-          retryable: true,
-          message: "LOVABLE_API_KEY missing",
-        };
-        continue;
-      }
-      const res = await callLovable(lovableKey, image, prompt, refBlob);
-      if (res.success && res.b64) {
-        logAiEvent("info", {
-          event: "ai_generation_success",
-          provider: "lovable",
-          scene,
-          interaction,
-        });
-        return Response.json({ b64: res.b64, provider: "lovable" });
-      }
-      lastResult = res;
-      logAiEvent(isPrimary && res.retryable ? "warn" : "error", {
-        event: "ai_provider_error",
-        provider: "lovable",
-        scene,
-        interaction,
-        category: res.category,
-        status: res.status,
-        fallbackTriggered: isPrimary && res.retryable,
-        errorSummary: res.message,
-      });
-      if (!res.retryable && res.category === "bad_request") break;
-    } else if (provider === "gemini") {
-      if (!geminiKey) {
-        lastResult = {
-          success: false,
-          category: "not_configured",
-          status: 503,
-          retryable: true,
-          message: "GEMINI_API_KEY missing",
-        };
-        continue;
-      }
-      const res = await callGemini(geminiKey, image, prompt, refBlob);
-      if (res.success && res.b64) {
-        logAiEvent("info", {
-          event: "ai_generation_success",
-          provider: "gemini",
-          scene,
-          interaction,
-        });
-        return Response.json({ b64: res.b64, provider: "gemini" });
-      }
-      lastResult = res;
-      logAiEvent("error", {
-        event: "ai_provider_error",
-        provider: "gemini",
-        scene,
-        interaction,
-        category: res.category,
-        status: res.status,
-        fallbackTriggered: false,
-        errorSummary: res.message,
-      });
-      if (!res.retryable && res.category === "bad_request") break;
-    }
+  const res = await callLovable(lovableKey, image, prompt, refBlob);
+  if (res.success && res.b64) {
+    logAiEvent("info", {
+      event: "ai_generation_success",
+      provider: "lovable",
+      scene,
+      interaction,
+    });
+    return Response.json({ b64: res.b64, provider: "lovable" });
   }
 
-  // If all providers failed
-  const finalCategory = lastResult?.category ?? "server_error";
-  const finalStatus = lastResult?.status ?? 502;
+  logAiEvent("error", {
+    event: "ai_provider_error",
+    provider: "lovable",
+    scene,
+    interaction,
+    category: res.category,
+    status: res.status,
+    fallbackTriggered: false,
+    errorSummary: res.message,
+  });
+
+  const finalCategory = res.category;
+  const finalStatus = res.status;
   const code =
     finalCategory === "quota"
       ? "credits"
@@ -453,28 +288,13 @@ export async function handleEnhanceRequest(request: Request): Promise<Response> 
           ? "denied"
           : finalCategory === "not_configured"
             ? "not_configured"
-            : finalCategory === "timeout" || finalCategory === "network_error"
-              ? "network"
-              : finalCategory === "bad_request" || finalCategory === "no_image_returned"
-                ? "rejected"
-                : "failed";
-
-  logAiEvent("error", {
-    event: "ai_all_providers_failed",
-    provider: "all",
-    scene,
-    interaction,
-    category: finalCategory,
-    status: finalStatus,
-  });
+            : "failed";
 
   return Response.json({ code }, { status: finalStatus });
 }
 
 /**
- * Post-capture AI image generation and styling with reliable two-provider failover:
- * Primary: Lovable AI
- * Backup: Google Gemini API
+ * Post-capture AI image generation and styling using Lovable AI key.
  */
 export const Route = createFileRoute("/api/enhance")({
   server: {
