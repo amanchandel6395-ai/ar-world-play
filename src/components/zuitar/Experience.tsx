@@ -20,6 +20,7 @@ export function Experience({ sceneId }: { sceneId: SceneId }) {
   const goHome = useCallback(() => navigate({ to: "/" }), [navigate]);
   const [dev] = useDevMode();
   const [lang, setLang, t] = useLang();
+  const [boothMode, setBoothMode] = useState(false);
   const fetchConfig = useServerFn(getPublicConfig);
   const [config, setConfig] = useState<PublicConfig | null>(null);
   const [configError, setConfigError] = useState(false);
@@ -54,6 +55,7 @@ export function Experience({ sceneId }: { sceneId: SceneId }) {
   }, [fetchConfig]);
 
   useEffect(() => {
+    setBoothMode(localStorage.getItem("zuitar.deviceMode") === "booth");
     detectCapabilities().then(setCaps);
     loadConfig();
   }, [loadConfig]);
@@ -105,11 +107,6 @@ export function Experience({ sceneId }: { sceneId: SceneId }) {
     // seg/t intentionally excluded: they must not restart the camera
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [phase, facing, scene, config]);
-
-  const pick = (id: InteractionId) => {
-    setInteraction(id);
-    engine.current?.setInteraction(id);
-  };
 
   const capture = () => {
     if (
@@ -170,9 +167,15 @@ export function Experience({ sceneId }: { sceneId: SceneId }) {
         photo={photo}
         sceneId={sceneId}
         interaction={interaction}
-        allowAi={!!config?.ai.imageReady || !!config?.ai.imageEnabled}
+        allowAi={Boolean(
+          config &&
+            config.ai.imageReady &&
+            config.ai.imageEnabled &&
+            (sceneId !== "bjp" || config.ready.bjp),
+        )}
         allowVideo={sceneId === "bjp" && !!config?.ai.videoReady}
         videoConfigured={sceneId === "bjp" && !!config?.ai.videoEnabled}
+        boothMode={boothMode}
         onRetake={() => {
           setPhoto(null);
           setPhase("live");
@@ -187,7 +190,6 @@ export function Experience({ sceneId }: { sceneId: SceneId }) {
   const ready = status?.engine && !error;
   const sceneReady = !!config?.ready[sceneId] || dev;
   const assetMissing = !sceneReady || (!!ready && !!engine.current?.standIn && !dev);
-  const interactions = config?.interactions.filter((i) => i.enabled) ?? [];
   const on = (b?: boolean) => (b ? "on" : "off") as "on" | "off";
   const rows: DebugRow[] = status
     ? [
@@ -257,9 +259,7 @@ export function Experience({ sceneId }: { sceneId: SceneId }) {
                 </span>
               ))}
           </div>
-          {caps && !caps.camera ? (
-            <p className="max-w-md text-warning">{t.noCamera}</p>
-          ) : configError ? (
+          {configError ? (
             <div className="flex flex-col items-center gap-3">
               <p className="max-w-md text-warning">{t.setupTitle}</p>
               <button onClick={loadConfig} className="zt-btn-primary min-w-64 text-xl">
@@ -276,15 +276,18 @@ export function Experience({ sceneId }: { sceneId: SceneId }) {
                 {sceneId === "bjp" ? t.setupBjp : t.setupChar}
               </p>
             </div>
-          ) : (
-            <div className="flex flex-col items-center gap-3">
-              <button
-                onClick={() => setPhase("live")}
-                disabled={!config}
-                className="zt-btn-primary min-w-64 text-xl disabled:opacity-50"
-              >
-                {config ? t.startCamera : t.loading}
-              </button>
+          ) : null}
+          {!caps?.camera && <p className="max-w-md text-warning">{t.noCamera}</p>}
+          {boothMode && <p className="max-w-md text-sm text-muted-foreground">{t.boothCameraOnly}</p>}
+          <div className="flex flex-col items-center gap-3">
+            <button
+              onClick={() => setPhase("live")}
+              disabled={!config || !sceneReady || !caps?.camera}
+              className="zt-btn-primary min-w-64 text-xl disabled:opacity-50"
+            >
+              {t.startCamera}
+            </button>
+            {!boothMode && (
               <label className="zt-btn-ghost cursor-pointer">
                 {t.choosePhoto}
                 <input
@@ -300,8 +303,8 @@ export function Experience({ sceneId }: { sceneId: SceneId }) {
                   }}
                 />
               </label>
-            </div>
-          )}
+            )}
+          </div>
           <div className="flex gap-3">
             <button onClick={goHome} className="zt-btn-ghost">
               ← {t.back}
@@ -418,28 +421,7 @@ export function Experience({ sceneId }: { sceneId: SceneId }) {
 
           {/* bottom bar */}
           <div className="absolute inset-x-0 bottom-0 flex flex-col gap-3 bg-gradient-to-t from-background/85 to-transparent px-4 pb-[max(1.25rem,env(safe-area-inset-bottom))] pt-10">
-            {interactions.length > 1 && (
-              <div className="flex flex-col items-center gap-1">
-                <p className="text-xs text-muted-foreground">{t.pick}</p>
-                <div className="flex max-w-full gap-2 overflow-x-auto pb-1">
-                  {interactions.map((i) => (
-                    <button
-                      key={i.id}
-                      onClick={() => pick(i.id)}
-                      aria-pressed={interaction === i.id}
-                      className={`flex shrink-0 items-center gap-1.5 rounded-full border px-4 py-2 text-sm font-semibold ${
-                        interaction === i.id
-                          ? "border-primary bg-primary text-primary-foreground"
-                          : "border-border bg-overlay text-foreground"
-                      }`}
-                    >
-                      <span>{i.icon}</span>
-                      {i.label[lang]}
-                    </button>
-                  ))}
-                </div>
-              </div>
-            )}
+
             <div className="grid grid-cols-3 items-center">
               <div />
               <div className="flex justify-center">

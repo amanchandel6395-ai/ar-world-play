@@ -22,6 +22,7 @@ export function ResultView({
   allowAi,
   allowVideo,
   videoConfigured,
+  boothMode,
   onRetake,
   onHome,
 }: {
@@ -32,6 +33,7 @@ export function ResultView({
   allowVideo: boolean;
   /** admin switched video on but it has not passed an end-to-end test yet */
   videoConfigured?: boolean;
+  boothMode: boolean;
   onRetake: () => void;
   onHome: () => void;
 }) {
@@ -111,7 +113,7 @@ export function ResultView({
     try {
       const fd = new FormData();
       fd.append("image", photo, "capture.jpg");
-      fd.append("scene", sceneId);
+      fd.append("scene", sceneId === "yogi" || sceneId === "modi" ? "photo" : sceneId);
       fd.append("interaction", interaction);
       const res = await fetch("/api/enhance", { method: "POST", body: fd });
       if (!res.ok) {
@@ -203,7 +205,7 @@ export function ResultView({
       <div className="flex w-full flex-col gap-3 p-4 pb-8 lg:w-[26rem] lg:justify-center lg:p-8">
         {qr ? (
           <div className="flex flex-col items-center gap-3 rounded-2xl bg-card p-5 text-center">
-            <p className="text-xl font-bold">Scan to get your photo</p>
+            <p className="text-xl font-bold">{boothMode ? t.scanQrPhone : t.scanQr}</p>
             <img
               src={qr}
               alt="QR code to download your photo"
@@ -217,11 +219,13 @@ export function ResultView({
         ) : (
           <>
             <div className="grid grid-cols-2 gap-3">
-              <button onClick={download} className="zt-btn-primary">
-                Download
-              </button>
+              {!boothMode && (
+                <button onClick={download} className="zt-btn-primary">
+                  {t.download}
+                </button>
+              )}
               <button onClick={makeQr} disabled={qrBusy} className="zt-btn-secondary">
-                {qrBusy ? "Creating…" : "Scan QR"}
+                {qrBusy ? t.creating : t.qr}
               </button>
               <button onClick={onRetake} className="zt-btn-secondary">
                 Retake
@@ -230,13 +234,18 @@ export function ResultView({
                 Home
               </button>
             </div>
+            {(sceneId === "yogi" || sceneId === "modi") && (
+              <p className="rounded-xl border border-border bg-card/60 p-3 text-center text-sm text-muted-foreground">
+                {t.leaderAiNote}
+              </p>
+            )}
             {allowAi && !aiPhoto && (
               <button
                 onClick={enhance}
                 disabled={aiBusy}
                 className="zt-btn-ghost border border-border"
               >
-                ✦ {t.aiLabel}
+                ✦ {sceneId === "bjp" ? t.bjpAiLabel : t.aiLabel}
               </button>
             )}
             {aiPhoto && (

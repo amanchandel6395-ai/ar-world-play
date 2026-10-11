@@ -37,8 +37,20 @@ function Home() {
   const [dev, setDev] = useDevMode();
   const [flash, setFlash] = useState<string | null>(null);
   const [lang, setLang, t] = useLang();
+  const [boothMode, setBoothMode] = useState(false);
+  const setDeviceMode = (booth: boolean) => {
+    localStorage.setItem("zuitar.deviceMode", booth ? "booth" : "personal");
+    setBoothMode(booth);
+  };
   const fetchConfig = useServerFn(getPublicConfig);
   const [ready, setReady] = useState<PublicConfig["ready"] | null>(null);
+
+  useEffect(() => {
+    setBoothMode(
+      new URLSearchParams(window.location.search).get("mode") === "booth" ||
+        localStorage.getItem("zuitar.deviceMode") === "booth",
+    );
+  }, []);
 
   useEffect(() => {
     fetchConfig()
@@ -74,6 +86,24 @@ function Home() {
         >
           {LangToggleLabel(lang)}
         </button>
+        <div className="mt-3 flex flex-wrap justify-center gap-2" aria-label={t.deviceMode}>
+          <button
+            type="button"
+            onClick={() => setDeviceMode(false)}
+            aria-pressed={!boothMode}
+            className={`zt-btn-ghost border border-border ${!boothMode ? "ring-2 ring-primary" : ""}`}
+          >
+            {t.personalMode}
+          </button>
+          <button
+            type="button"
+            onClick={() => setDeviceMode(true)}
+            aria-pressed={boothMode}
+            className={`zt-btn-ghost border border-border ${boothMode ? "ring-2 ring-primary" : ""}`}
+          >
+            {t.boothMode}
+          </button>
+        </div>
       </header>
 
       <div className="mx-auto mt-8 grid w-full max-w-7xl flex-1 gap-4 md:mt-12 sm:grid-cols-2 xl:grid-cols-3 md:gap-6">
@@ -82,6 +112,9 @@ function Home() {
             key={c.id}
             to="/experience/$scene"
             params={{ scene: c.id }}
+            onClick={() =>
+              localStorage.setItem("zuitar.deviceMode", boothMode ? "booth" : "personal")
+            }
             className={`zt-card group relative flex min-h-44 flex-col justify-end overflow-hidden rounded-3xl border border-border bg-gradient-to-br ${c.tone} to-card p-6 transition-transform active:scale-[0.98] md:min-h-[24rem] md:p-8`}
             style={{ animationDelay: `${i * 90}ms` }}
           >
