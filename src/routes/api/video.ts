@@ -102,6 +102,7 @@ export const Route = createFileRoute("/api/video")({
           }
         }
         const sb = await admin();
+        if (!sb) return Response.json({ code: "not_configured" }, { status: 503 });
         const path = `videos/${id}.mp4`;
         const signed = () => sb.storage.from("captures").createSignedUrl(path, 3600);
         // Idempotent: already stored?

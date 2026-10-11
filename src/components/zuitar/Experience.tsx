@@ -153,41 +153,6 @@ export function Experience({ sceneId }: { sceneId: SceneId }) {
     engine.current?.setSegmentation(v);
   };
 
-  const handleUploadPhoto = async (file?: File) => {
-    if (!file) return;
-    if (!file.type.startsWith("image/")) {
-      setError(lang === "hi" ? "कृपया image फ़ाइल चुनें।" : "Please choose an image file.");
-      return;
-    }
-    setPhoto(file);
-    setPhase("result");
-  };
-
-  const getInteractionLabel = (id: InteractionId, fallback: string) => {
-    if (sceneId === "modi") {
-      if (id === "selfie") return lang === "hi" ? "पीएम मोदी सेल्फ़ी" : "Selfie with PM Modi";
-      if (id === "handshake")
-        return lang === "hi" ? "मोदी जी से हाथ मिलाएँ" : "Handshake with Modi";
-      if (id === "hug") return lang === "hi" ? "मोदी जी से गले मिलें" : "Hug with Modi";
-      if (id === "meeting") return lang === "hi" ? "मोदी जी से मुलाक़ात" : "Meeting with Modi";
-      if (id === "scarf") return lang === "hi" ? "अंगवस्त्र सम्मान" : "Scarf Honor";
-    }
-    if (sceneId === "yogi") {
-      if (id === "selfie") return lang === "hi" ? "सीएम योगी सेल्फ़ी" : "Selfie with CM Yogi";
-      if (id === "handshake")
-        return lang === "hi" ? "योगी जी से हाथ मिलाएँ" : "Handshake with Yogi";
-      if (id === "hug") return lang === "hi" ? "योगी जी से गले मिलें" : "Hug with Yogi";
-      if (id === "meeting") return lang === "hi" ? "योगी जी से मुलाक़ात" : "Meeting with Yogi";
-      if (id === "scarf") return lang === "hi" ? "अंगवस्त्र सम्मान" : "Scarf Honor";
-    }
-    if (sceneId === "bjp") {
-      if (id === "selfie") return lang === "hi" ? "भाजपा कमल लुक" : "BJP Lotus Look";
-      if (id === "scarf") return lang === "hi" ? "टोपी व पटका" : "Cap & Scarf";
-      if (id === "event") return lang === "hi" ? "मंच व ध्वज" : "Stage & Flag";
-    }
-    return fallback;
-  };
-
   if (phase === "world" && config) {
     const build = scene.buildWorld;
     return (
@@ -312,24 +277,26 @@ export function Experience({ sceneId }: { sceneId: SceneId }) {
               </p>
             </div>
           ) : (
-            <div className="flex flex-col sm:flex-row items-center gap-3">
+            <div className="flex flex-col items-center gap-3">
               <button
                 onClick={() => setPhase("live")}
                 disabled={!config}
-                className="zt-btn-primary min-w-56 text-lg sm:text-xl disabled:opacity-50"
+                className="zt-btn-primary min-w-64 text-xl disabled:opacity-50"
               >
-                📷 {config ? t.startCamera : t.loading}
+                {config ? t.startCamera : t.loading}
               </button>
-              <label className="zt-btn-secondary min-w-56 text-lg sm:text-xl flex items-center justify-center gap-2 cursor-pointer border border-border">
-                <span>📁</span>
-                <span>{lang === "hi" ? "फोटो अपलोड करें" : "Upload photo"}</span>
+              <label className="zt-btn-ghost cursor-pointer">
+                {t.choosePhoto}
                 <input
                   type="file"
                   accept="image/*"
                   className="sr-only"
                   onChange={(e) => {
-                    void handleUploadPhoto(e.currentTarget.files?.[0]);
+                    const file = e.currentTarget.files?.[0];
                     e.currentTarget.value = "";
+                    if (!file || !file.type.startsWith("image/")) return;
+                    setPhoto(file);
+                    setPhase("result");
                   }}
                 />
               </label>
@@ -466,31 +433,15 @@ export function Experience({ sceneId }: { sceneId: SceneId }) {
                           : "border-border bg-overlay text-foreground"
                       }`}
                     >
-                      <span className="text-base">{i.icon}</span>
-                      <span>{getInteractionLabel(i.id, i.label[lang])}</span>
+                      <span>{i.icon}</span>
+                      {i.label[lang]}
                     </button>
                   ))}
                 </div>
               </div>
             )}
             <div className="grid grid-cols-3 items-center">
-              <div className="flex justify-start">
-                <label
-                  className="zt-btn-round flex items-center justify-center cursor-pointer"
-                  title={lang === "hi" ? "फोटो अपलोड करें" : "Upload photo"}
-                >
-                  📁
-                  <input
-                    type="file"
-                    accept="image/*"
-                    className="sr-only"
-                    onChange={(e) => {
-                      void handleUploadPhoto(e.currentTarget.files?.[0]);
-                      e.currentTarget.value = "";
-                    }}
-                  />
-                </label>
-              </div>
+              <div />
               <div className="flex justify-center">
                 <button
                   onClick={capture}
