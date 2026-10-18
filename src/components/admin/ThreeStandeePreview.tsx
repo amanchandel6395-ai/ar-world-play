@@ -212,8 +212,8 @@ export function ThreeStandeePreview({
         });
 
         // Remap UVs so photo fits 1:1 on front face
-        const pos = extrudeGeom.attributes.position!;
-        const uv = extrudeGeom.attributes.uv!;
+        const pos = extrudeGeom.attributes["position"]!;
+        const uv = extrudeGeom.attributes["uv"]!;
         for (let i = 0; i < pos.count; i++) {
           const vx = pos.getX(i);
           const vy = pos.getY(i);

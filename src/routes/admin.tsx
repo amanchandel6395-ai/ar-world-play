@@ -86,7 +86,7 @@ export function AdminPage() {
 
   const [status, setStatus] = useState<Awaited<ReturnType<typeof adminStatus>> | null>(null);
   const [password, setPassword] = useState("admin123");
-  const [config, setConfig] = useState<AppConfig>(() => DEFAULT_CONFIG);
+  const [config, setConfig] = useState<AppConfig | null>(() => DEFAULT_CONFIG);
   const [busy, setBusy] = useState(false);
   const [message, setMessage] = useState("");
   const [activeTab, setActiveTab] = useState<AdminTab>("cutouts");

@@ -350,7 +350,7 @@ function authorizedContent(ch: PubChar, onReady: (o: THREE.Object3D) => void, on
       if (!plane) {
         setupDimensions(640, 360);
       }
-      plane!.material.dispose();
+      (plane!.material as THREE.Material).dispose();
       plane!.material = chromaMat;
     } else {
       if (!plane) {
@@ -362,7 +362,7 @@ function authorizedContent(ch: PubChar, onReady: (o: THREE.Object3D) => void, on
         alphaTest: 0.02,
         side: THREE.DoubleSide,
       });
-      plane!.material.dispose();
+      (plane!.material as THREE.Material).dispose();
       plane!.material = bMat;
     }
 
@@ -937,7 +937,7 @@ export function doubleCompanionRuntime(
       const vw = br.x - tl.x;
       const w = (vw * 84) / 100;
       const h = w * (240 / 1024);
-      sloganBanner.mesh.scale.set(w * sx, h, 1);
+      sloganBanner.mesh.scale.set(w, h, 1);
       const cx = 0.5;
       const cy = 0.18;
       const uc = t.mirrored ? 1 - cx : cx;
