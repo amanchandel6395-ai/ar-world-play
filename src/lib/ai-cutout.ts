@@ -6,7 +6,7 @@
  * - Local WASM & TFLite model with CDN fallback
  */
 
-const LOCAL_WASM = "/mediapipe/wasm";
+const LOCAL_WASM = "https://cdn.jsdelivr.net/npm/@mediapipe/tasks-vision@1.1.0/wasm";
 const CDN_WASM = "https://cdn.jsdelivr.net/npm/@mediapipe/tasks-vision@1.1.0/wasm";
 const LOCAL_MODEL = "/mediapipe/models/selfie_segmenter.tflite";
 const CDN_MODEL =
