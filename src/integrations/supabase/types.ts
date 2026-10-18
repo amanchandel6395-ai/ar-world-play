@@ -14,7 +14,51 @@ export type Database = {
   }
   public: {
     Tables: {
-      [_ in never]: never
+      app_config: {
+        Row: {
+          data: Json
+          id: string
+          updated_at: string
+        }
+        Insert: {
+          data?: Json
+          id: string
+          updated_at?: string
+        }
+        Update: {
+          data?: Json
+          id?: string
+          updated_at?: string
+        }
+        Relationships: []
+      }
+      shares: {
+        Row: {
+          ai_generated: boolean
+          created_at: string
+          expires_at: string
+          kind: string
+          path: string
+          token: string
+        }
+        Insert: {
+          ai_generated?: boolean
+          created_at?: string
+          expires_at: string
+          kind?: string
+          path: string
+          token: string
+        }
+        Update: {
+          ai_generated?: boolean
+          created_at?: string
+          expires_at?: string
+          kind?: string
+          path?: string
+          token?: string
+        }
+        Relationships: []
+      }
     }
     Views: {
       [_ in never]: never
