@@ -64,7 +64,7 @@ export function getEnhancePrompt(scene: string, interaction: string, cfg: AppCon
 /** Extra rules so leaders and party material are never distorted, mirrored or upside down. */
 export function accuracySuffix(scene: string): string {
   const common =
-    " The final image must be upright and correctly oriented: never upside down, never mirrored, never rotated, no extra or missing limbs, natural human proportions. Any text, logo or emblem must read the correct way round.";
+    " The first image is the customer; the second image (when given) is the official reference to copy exactly. The final image must be upright and correctly oriented: never upside down, never mirrored, never rotated, no extra or missing limbs, natural human proportions. Any text, logo or emblem must read the correct way round.";
   if (scene === "yogi")
     return `${common} Chief Minister Yogi Adityanath must look exactly like the reference image (same face, saffron attire); do not invent a different face.`;
   if (scene === "modi")
@@ -136,7 +136,7 @@ async function callLovable(
     const safeImageBlob = new globalThis.Blob([imageBytes], {
       type: imageBlob.type || "image/jpeg",
     });
-    out.append("image", safeImageBlob, "capture.jpg");
+    out.append("image[]", safeImageBlob, "capture.jpg");
     out.append("size", "1024x1536");
     out.append("output_format", "jpeg");
     if (refBlob) {
@@ -144,7 +144,7 @@ async function callLovable(
       const safeRefBlob = new globalThis.Blob([refBytes], {
         type: refBlob.type || "image/png",
       });
-      out.append("reference_image", safeRefBlob, "reference.png");
+      out.append("image[]", safeRefBlob, "reference.png");
     }
 
     const controller = new AbortController();
