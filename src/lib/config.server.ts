@@ -98,7 +98,7 @@ export async function loadConfig(): Promise<AppConfig> {
         .select("data")
         .eq("id", "main")
         .maybeSingle();
-      if (!error && data?.data) {
+      if (!error && data?.data && Object.keys(data.data as object).length > 0) {
         return mergeConfig(data.data);
       }
     }
