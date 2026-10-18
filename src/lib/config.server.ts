@@ -232,6 +232,7 @@ export async function toPublic(cfg: AppConfig): Promise<PublicConfig> {
         (characterReady(cfg.characters.modi) && Object.keys(characters.modi.poses).length > 0) ||
         cfg.characters.modi.enabled,
       bjp: bjpReady,
+      both: cfg.characters.yogi.enabled && cfg.characters.modi.enabled,
     },
     brand: cfg.brand,
   };
