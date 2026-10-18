@@ -235,6 +235,8 @@ export async function toPublic(cfg: AppConfig): Promise<PublicConfig> {
       both: cfg.characters.yogi.enabled && cfg.characters.modi.enabled,
     },
     brand: cfg.brand,
+    customStandees: cfg.customStandees,
+    slogans: cfg.slogans,
   };
 }
 
