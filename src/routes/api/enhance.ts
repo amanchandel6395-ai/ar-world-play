@@ -63,7 +63,7 @@ export function getEnhancePrompt(scene: string, interaction: string, cfg: AppCon
       gift: `Turn this customer photo into a professional ceremonial photo: the customer, wearing ${scarf}, proudly holds a framed BJP lotus memento / shield (smriti chinh) in both hands at chest height. Background: decorated stage with marigold garlands and soft saffron lighting.`,
       event: `Turn this customer photo into a professional rally photo: the customer, wearing ${scarf}, waves a large official BJP flag (saffron and green with the white lotus symbol) held on a pole. Background: big festive crowd and stage, golden-hour light.`,
     };
-    const base = (byIx[interaction] ?? byIx.selfie) + keep;
+    const base = (byIx[interaction] ?? byIx["selfie"]) + keep;
     return cfg.ai.bjpImagePrompt ? `${base} ${cfg.ai.bjpImagePrompt}` : base;
   }
 

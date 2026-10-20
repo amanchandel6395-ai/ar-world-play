@@ -201,7 +201,7 @@ export function ResultView({
             : t.videoFail;
   useIdleReset(KIOSK.resultTimeoutMs, onHome);
 
-  const slogans = SLOGANS[sceneId] ?? SLOGANS.yogi;
+  const slogans = SLOGANS[sceneId] ?? SLOGANS["yogi"] ?? [];
   const [slogan, setSlogan] = useState<string | null>(null);
   const base = showAi && aiPhoto ? aiPhoto : photo;
   const [withText, setWithText] = useState<Blob | null>(null);
