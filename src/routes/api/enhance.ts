@@ -53,8 +53,17 @@ export function getEnhancePrompt(scene: string, interaction: string, cfg: AppCon
   }
 
   if (scene === "bjp") {
-    const base =
-      "Enhance this vertical 9:16 customer photo with authentic BJP campaign and event styling. Drape a traditional BJP saffron and green scarf (angavastram / patka) with lotus symbol naturally over the customer's shoulders, a stylish BJP saffron cap with lotus emblem, and warm saffron and green festive stage lighting with a soft bokeh background featuring subtle saffron and green tones and the clean lotus emblem. Preserve the customer's exact identity, face, expression, and skin tone. Do not add any other people.";
+    const keep =
+      " Preserve the customer's exact identity, face, expression, hairstyle and skin tone. Do not add any other people. Professional DSLR portrait quality, sharp focus, natural skin, flattering soft light, clean composition, no distortion.";
+    const scarf =
+      "a saffron BJP scarf (patka / angavastram) with a clearly printed white-outlined lotus (kamal) symbol on both ends, draped neatly around the neck and over both shoulders";
+    const byIx: Record<string, string> = {
+      selfie: `Turn this customer photo into a professional studio-quality BJP supporter portrait. The customer wears ${scarf}. Background: soft blurred saffron-to-green gradient with a subtle large lotus emblem. Chest-up framing, confident smile.`,
+      scarf: `Turn this customer photo into a professional BJP karyakarta portrait. The customer wears an authentic saffron BJP cap with the lotus emblem facing forward and ${scarf}. Background: outdoor rally ground with soft bokeh of saffron flags. Half-body framing.`,
+      gift: `Turn this customer photo into a professional ceremonial photo: the customer, wearing ${scarf}, proudly holds a framed BJP lotus memento / shield (smriti chinh) in both hands at chest height. Background: decorated stage with marigold garlands and soft saffron lighting.`,
+      event: `Turn this customer photo into a professional rally photo: the customer, wearing ${scarf}, waves a large official BJP flag (saffron and green with the white lotus symbol) held on a pole. Background: big festive crowd and stage, golden-hour light.`,
+    };
+    const base = (byIx[interaction] ?? byIx.selfie) + keep;
     return cfg.ai.bjpImagePrompt ? `${base} ${cfg.ai.bjpImagePrompt}` : base;
   }
 
