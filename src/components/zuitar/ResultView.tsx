@@ -15,6 +15,63 @@ async function toBase64(b: Blob) {
   return btoa(s);
 }
 
+export const SLOGANS: Record<string, string[]> = {
+  yogi: [
+    "We are with you Yogi Ji",
+    "मैं योगी जी के साथ हूँ",
+    "मैं भाजपा के साथ हूँ",
+    "योगी जी ज़िंदाबाद",
+    "बाबा का आशीर्वाद, सबका विकास",
+    "यूपी का गौरव — योगी जी",
+    "जय श्री राम",
+  ],
+  modi: [
+    "We are with you Modi Ji",
+    "मैं मोदी जी के साथ हूँ",
+    "मैं भाजपा के साथ हूँ",
+    "मोदी है तो मुमकिन है",
+    "फिर एक बार मोदी सरकार",
+    "एक भारत, श्रेष्ठ भारत",
+  ],
+  bjp: [
+    "मैं भाजपा के साथ हूँ",
+    "Proud BJP Supporter",
+    "अबकी बार भाजपा सरकार",
+    "राष्ट्र प्रथम, सदैव प्रथम",
+    "विकास भी, विरासत भी",
+    "जय श्री राम",
+  ],
+};
+
+/** Draws the slogan as a saffron banner at the bottom of the photo (crisp, correct Hindi text). */
+async function addSlogan(img: Blob, text: string): Promise<Blob> {
+  const bmp = await createImageBitmap(img);
+  const c = document.createElement("canvas");
+  c.width = bmp.width;
+  c.height = bmp.height;
+  const g = c.getContext("2d")!;
+  g.drawImage(bmp, 0, 0);
+  const h = Math.round(c.height * 0.11);
+  const y = c.height - h;
+  const grad = g.createLinearGradient(0, y, c.width, y);
+  grad.addColorStop(0, "rgba(255,120,0,0.92)");
+  grad.addColorStop(1, "rgba(19,136,8,0.92)");
+  g.fillStyle = grad;
+  g.fillRect(0, y, c.width, h);
+  let size = Math.round(h * 0.5);
+  const font = (s: number) =>
+    `800 ${s}px "Noto Sans Devanagari", "Mangal", "Nirmala UI", system-ui, sans-serif`;
+  g.font = font(size);
+  while (g.measureText(text).width > c.width * 0.92 && size > 12) g.font = font(--size);
+  g.fillStyle = "#ffffff";
+  g.textAlign = "center";
+  g.textBaseline = "middle";
+  g.shadowColor = "rgba(0,0,0,0.45)";
+  g.shadowBlur = size * 0.15;
+  g.fillText(text, c.width / 2, y + h / 2);
+  return new Promise((r) => c.toBlob((b) => r(b ?? img), "image/jpeg", 0.92));
+}
+
 export function ResultView({
   photo,
   sceneId,
@@ -144,7 +201,19 @@ export function ResultView({
             : t.videoFail;
   useIdleReset(KIOSK.resultTimeoutMs, onHome);
 
-  const current = showAi && aiPhoto ? aiPhoto : photo;
+  const slogans = SLOGANS[sceneId] ?? SLOGANS["yogi"] ?? [];
+  const [slogan, setSlogan] = useState<string | null>(null);
+  const base = showAi && aiPhoto ? aiPhoto : photo;
+  const [withText, setWithText] = useState<Blob | null>(null);
+  useEffect(() => {
+    let live = true;
+    setWithText(null);
+    if (slogan) void addSlogan(base, slogan).then((b) => live && setWithText(b));
+    return () => {
+      live = false;
+    };
+  }, [base, slogan]);
+  const current = slogan && withText ? withText : base;
   const url = useMemo(() => URL.createObjectURL(current), [current]);
   useEffect(() => () => URL.revokeObjectURL(url), [url]);
 
@@ -387,6 +456,36 @@ export function ResultView({
                 </button>
               </div>
             )}
+            <div className="flex flex-col gap-2 rounded-2xl border border-border bg-card/60 p-3.5">
+              <p className="text-xs font-bold uppercase tracking-wider text-primary">
+                {isHindi ? "2. फ़ोटो पर स्लोगन लगाएँ?" : "2. Add slogan text?"}
+              </p>
+              <div className="flex flex-col gap-1.5 max-h-[30vh] overflow-y-auto pr-1">
+                <button
+                  type="button"
+                  onClick={() => {
+                    setSlogan(null);
+                    setQr(null);
+                  }}
+                  className={`rounded-xl border px-3 py-2 text-left text-sm ${slogan === null ? "border-primary bg-primary/15 font-bold text-primary" : "border-border/60"}`}
+                >
+                  {isHindi ? "बिना टेक्स्ट" : "No text"}
+                </button>
+                {slogans.map((s) => (
+                  <button
+                    key={s}
+                    type="button"
+                    onClick={() => {
+                      setSlogan(s);
+                      setQr(null);
+                    }}
+                    className={`rounded-xl border px-3 py-2 text-left text-sm ${slogan === s ? "border-primary bg-primary/15 font-bold text-primary" : "border-border/60"}`}
+                  >
+                    {s}
+                  </button>
+                ))}
+              </div>
+            </div>
             {aiPhoto && (
               <button
                 onClick={() => {

@@ -53,8 +53,17 @@ export function getEnhancePrompt(scene: string, interaction: string, cfg: AppCon
   }
 
   if (scene === "bjp") {
-    const base =
-      "Enhance this vertical 9:16 customer photo with authentic BJP campaign and event styling. Drape a traditional BJP saffron and green scarf (angavastram / patka) with lotus symbol naturally over the customer's shoulders, a stylish BJP saffron cap with lotus emblem, and warm saffron and green festive stage lighting with a soft bokeh background featuring subtle saffron and green tones and the clean lotus emblem. Preserve the customer's exact identity, face, expression, and skin tone. Do not add any other people.";
+    const keep =
+      " Preserve the customer's exact identity, face, expression, hairstyle and skin tone. Do not add any other people. Professional DSLR portrait quality, sharp focus, natural skin, flattering soft light, clean composition, no distortion.";
+    const scarf =
+      "a saffron BJP scarf (patka / angavastram) with a clearly printed white-outlined lotus (kamal) symbol on both ends, draped neatly around the neck and over both shoulders";
+    const byIx: Record<string, string> = {
+      selfie: `Turn this customer photo into a professional studio-quality BJP supporter portrait. The customer wears ${scarf}. Background: soft blurred saffron-to-green gradient with a subtle large lotus emblem. Chest-up framing, confident smile.`,
+      scarf: `Turn this customer photo into a professional BJP karyakarta portrait. The customer wears an authentic saffron BJP cap with the lotus emblem facing forward and ${scarf}. Background: outdoor rally ground with soft bokeh of saffron flags. Half-body framing.`,
+      gift: `Turn this customer photo into a professional ceremonial photo: the customer, wearing ${scarf}, proudly holds a framed BJP lotus memento / shield (smriti chinh) in both hands at chest height. Background: decorated stage with marigold garlands and soft saffron lighting.`,
+      event: `Turn this customer photo into a professional rally photo: the customer, wearing ${scarf}, waves a large official BJP flag (saffron and green with the white lotus symbol) held on a pole. Background: big festive crowd and stage, golden-hour light.`,
+    };
+    const base = (byIx[interaction] ?? byIx["selfie"]) + keep;
     return cfg.ai.bjpImagePrompt ? `${base} ${cfg.ai.bjpImagePrompt}` : base;
   }
 
@@ -65,10 +74,12 @@ export function getEnhancePrompt(scene: string, interaction: string, cfg: AppCon
 export function accuracySuffix(scene: string): string {
   const common =
     " The first image is the customer; the second image (when given) is the official reference to copy exactly. The final image must be upright and correctly oriented: never upside down, never mirrored, never rotated, no extra or missing limbs, natural human proportions. Any text, logo or emblem must read the correct way round.";
+  const pro =
+    " Compose it as a professional photo taken by a photographer standing in front of both people (NOT an arm's-length selfie, no outstretched arm, no wide-angle distortion): both facing the camera, eye-level, 50mm lens look, sharp focus on both faces, balanced soft lighting, clean dignified background. Any saffron scarf / angavastram shown must carry a printed lotus (kamal) symbol.";
   if (scene === "yogi")
-    return `${common} Chief Minister Yogi Adityanath must look exactly like the reference image (same face, saffron attire); do not invent a different face.`;
+    return `${common}${pro} Chief Minister Yogi Adityanath must look exactly like the reference image (same face, saffron attire); do not invent a different face.`;
   if (scene === "modi")
-    return `${common} Prime Minister Narendra Modi must look exactly like the reference image (same face, white beard, spectacles, attire); do not invent a different face.`;
+    return `${common}${pro} Prime Minister Narendra Modi must look exactly like the reference image (same face, white beard, spectacles, attire); do not invent a different face.`;
   if (scene === "bjp")
     return `${common} Copy the BJP cap, saffron-green scarf, lotus emblem and flag exactly as in the reference image: same colours, same lotus symbol, same design. The cap sits correctly on the head with the lotus emblem facing forward.`;
   return common;
