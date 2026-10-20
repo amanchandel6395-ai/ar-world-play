@@ -74,10 +74,12 @@ export function getEnhancePrompt(scene: string, interaction: string, cfg: AppCon
 export function accuracySuffix(scene: string): string {
   const common =
     " The first image is the customer; the second image (when given) is the official reference to copy exactly. The final image must be upright and correctly oriented: never upside down, never mirrored, never rotated, no extra or missing limbs, natural human proportions. Any text, logo or emblem must read the correct way round.";
+  const pro =
+    " Compose it as a professional photo taken by a photographer standing in front of both people (NOT an arm's-length selfie, no outstretched arm, no wide-angle distortion): both facing the camera, eye-level, 50mm lens look, sharp focus on both faces, balanced soft lighting, clean dignified background. Any saffron scarf / angavastram shown must carry a printed lotus (kamal) symbol.";
   if (scene === "yogi")
-    return `${common} Chief Minister Yogi Adityanath must look exactly like the reference image (same face, saffron attire); do not invent a different face.`;
+    return `${common}${pro} Chief Minister Yogi Adityanath must look exactly like the reference image (same face, saffron attire); do not invent a different face.`;
   if (scene === "modi")
-    return `${common} Prime Minister Narendra Modi must look exactly like the reference image (same face, white beard, spectacles, attire); do not invent a different face.`;
+    return `${common}${pro} Prime Minister Narendra Modi must look exactly like the reference image (same face, white beard, spectacles, attire); do not invent a different face.`;
   if (scene === "bjp")
     return `${common} Copy the BJP cap, saffron-green scarf, lotus emblem and flag exactly as in the reference image: same colours, same lotus symbol, same design. The cap sits correctly on the head with the lotus emblem facing forward.`;
   return common;
