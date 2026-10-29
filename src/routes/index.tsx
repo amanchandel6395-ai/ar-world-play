@@ -241,7 +241,7 @@ function Home() {
       form.append("scene", scene);
       form.append("interaction", interaction);
       const response = await fetch("/api/enhance", { method: "POST", body: form });
-      const result = (await response.json().catch(() => ({}))) as { b64?: string; code?: string };
+      const result = (await response.json().catch(() => ({}))) as { b64?: string; code?: string; message?: string };
       if (!response.ok || !result.b64) {
         const message =
           result.code === "not_configured"
@@ -255,7 +255,7 @@ function Home() {
               : isHindi
                 ? "AI edit अभी पूरा नहीं हो सका।"
                 : "The AI edit could not be completed.";
-        throw new Error(message);
+        throw new Error(result.message || message);
       }
       setAiPhoto(`data:image/jpeg;base64,${result.b64}`);
       setShowAi(true);
