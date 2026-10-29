@@ -252,10 +252,11 @@ export function ResultView({
       fd.append("interaction", targetIx);
       const res = await fetch("/api/enhance", { method: "POST", body: fd });
       if (!res.ok) {
-        const j = (await res.json().catch(() => ({}))) as { code?: string };
-        throw new Error(codeMsg(j.code, "ai"));
+        const j = (await res.json().catch(() => ({}))) as { code?: string; message?: string };
+        throw new Error(j.message || codeMsg(j.code, "ai"));
       }
-      const { b64 } = (await res.json()) as { b64: string };
+      const { b64 } = (await res.json()) as { b64?: string };
+      if (!b64) throw new Error("The photo service returned no completed image.");
       const bin = Uint8Array.from(atob(b64), (c) => c.charCodeAt(0));
       setAiPhoto(new Blob([bin], { type: "image/jpeg" }));
       setShowAi(true);

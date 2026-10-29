@@ -158,19 +158,22 @@ async function callLovable(
       out.append("image[]", safeRefBlob, "reference.png");
     }
 
-    const controller = new AbortController();
-    const timeoutId = setTimeout(() => controller.abort(), 45000);
-
     const res = await fetch(`${LOVABLE_GATEWAY}/v1/images/edits`, {
       method: "POST",
       headers: { Authorization: `Bearer ${key}` },
       body: out,
-      signal: controller.signal,
     });
-    clearTimeout(timeoutId);
 
     if (!res.ok) {
       const errText = await res.text().catch(() => "");
+      let message = "The photo service could not complete this request.";
+      try {
+        const error = JSON.parse(errText) as { message?: string; error?: { message?: string } };
+        message = error.error?.message || error.message || message;
+      } catch {
+        // Plain-text upstream errors are safe only when they are not HTML pages.
+        if (errText && !errText.trimStart().startsWith("<")) message = errText.slice(0, 1000);
+      }
       const status = res.status;
       const category =
         status === 402
@@ -182,25 +185,28 @@ async function callLovable(
               : status >= 500
                 ? "server_error"
                 : "bad_request";
-      const retryable = status === 429 || status === 402 || status >= 500;
+      const retryable = status === 429 || status >= 500;
       return {
         success: false,
         category,
         status,
         retryable,
-        message: errText.slice(0, 160),
+        message,
       };
     }
 
-    const json = (await res.json()) as { data?: { b64_json?: string }[] };
+    const json = (await res.json()) as {
+      data?: { b64_json?: string }[];
+      error?: { message?: string };
+    };
     const b64 = json.data?.[0]?.b64_json;
     if (!b64) {
       return {
         success: false,
         category: "no_image_returned",
-        status: 502,
-        retryable: true,
-        message: "Empty image data in response",
+        status: 422,
+        retryable: false,
+        message: json.error?.message || "The photo service returned no completed image. This request has stopped.",
       };
     }
     return { success: true, b64, category: "success", status: 200, retryable: false };
@@ -228,7 +234,7 @@ export async function handleEnhanceRequest(request: Request): Promise<Response> 
       category: "not_configured",
       status: 503,
     });
-    return Response.json({ code: "not_configured" }, { status: 503 });
+    return Response.json({ code: "not_configured", message: "The photo service key is not configured." }, { status: 503 });
   }
 
   const form = await request.formData();
@@ -323,7 +329,7 @@ export async function handleEnhanceRequest(request: Request): Promise<Response> 
             ? "not_configured"
             : "failed";
 
-  return Response.json({ code }, { status: finalStatus });
+  return Response.json({ code, message: res.message, retryable: res.retryable }, { status: finalStatus });
 }
 
 /**
