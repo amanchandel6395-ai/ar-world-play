@@ -58,3 +58,42 @@ describe("Photo generation error recovery", () => {
     expect(fetch).toHaveBeenCalledTimes(1);
   });
 });
+
+describe("Backup Gemini key", () => {
+  const geminiOk = () =>
+    Response.json({ candidates: [{ content: { parts: [{ inlineData: { data: "Z2VtaW5p" } }] } }] });
+
+  it("uses the backup key when Lovable credits run out (402)", async () => {
+    vi.stubEnv("LOVABLE_API_KEY", "test-key");
+    vi.stubEnv("GEMINI_API_KEY", "backup-key");
+    const fetch = vi
+      .fn()
+      .mockResolvedValueOnce(Response.json({ message: "Out of credits" }, { status: 402 }))
+      .mockResolvedValueOnce(geminiOk());
+    vi.stubGlobal("fetch", fetch);
+    const response = await handleEnhanceRequest(photoRequest());
+    expect(response.status).toBe(200);
+    expect(await response.json()).toMatchObject({ b64: "Z2VtaW5p", provider: "gemini" });
+    expect(String(fetch.mock.calls[1]?.[0])).toContain("generativelanguage.googleapis.com");
+  });
+
+  it("does not send a refused photo to the backup key", async () => {
+    vi.stubEnv("LOVABLE_API_KEY", "test-key");
+    vi.stubEnv("GEMINI_API_KEY", "backup-key");
+    const fetch = vi.fn().mockResolvedValue(Response.json({ error: { message: "Request refused." } }));
+    vi.stubGlobal("fetch", fetch);
+    const response = await handleEnhanceRequest(photoRequest());
+    expect(response.status).toBe(422);
+    expect(fetch).toHaveBeenCalledTimes(1);
+  });
+
+  it("works with only the backup key set", async () => {
+    vi.stubEnv("LOVABLE_API_KEY", "");
+    vi.stubEnv("GEMINI_API_KEY", "backup-key");
+    const fetch = vi.fn().mockResolvedValue(geminiOk());
+    vi.stubGlobal("fetch", fetch);
+    const response = await handleEnhanceRequest(photoRequest());
+    expect(response.status).toBe(200);
+    expect(fetch).toHaveBeenCalledTimes(1);
+  });
+});

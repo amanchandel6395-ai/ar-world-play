@@ -223,10 +223,112 @@ async function callLovable(
   }
 }
 
+function blobToBase64(bytes: ArrayBuffer): string {
+  const arr = new Uint8Array(bytes);
+  let bin = "";
+  for (let i = 0; i < arr.length; i += 0x8000) {
+    bin += String.fromCharCode(...arr.subarray(i, i + 0x8000));
+  }
+  return btoa(bin);
+}
+
+/** Backup provider: the owner's own Google Gemini key (GEMINI_API_KEY). */
+async function callGemini(
+  key: string,
+  imageBlob: Blob,
+  prompt: string,
+  refBlob: Blob | null,
+): Promise<ProviderResult> {
+  try {
+    const model = process.env["GEMINI_IMAGE_MODEL"] || "gemini-2.5-flash-image";
+    const parts: Record<string, unknown>[] = [
+      { text: prompt },
+      {
+        inline_data: {
+          mime_type: imageBlob.type || "image/jpeg",
+          data: blobToBase64(await imageBlob.arrayBuffer()),
+        },
+      },
+    ];
+    if (refBlob) {
+      parts.push({
+        inline_data: {
+          mime_type: refBlob.type || "image/png",
+          data: blobToBase64(await refBlob.arrayBuffer()),
+        },
+      });
+    }
+    const res = await fetch(
+      `https://generativelanguage.googleapis.com/v1beta/models/${model}:generateContent`,
+      {
+        method: "POST",
+        headers: { "Content-Type": "application/json", "x-goog-api-key": key },
+        body: JSON.stringify({
+          contents: [{ role: "user", parts }],
+          generationConfig: { responseModalities: ["IMAGE"] },
+        }),
+      },
+    );
+    const text = await res.text().catch(() => "");
+    let json: {
+      error?: { message?: string };
+      candidates?: { content?: { parts?: { inlineData?: { data?: string }; inline_data?: { data?: string } }[] } }[];
+    } = {};
+    try {
+      json = JSON.parse(text);
+    } catch {
+      // non-JSON body
+    }
+    if (!res.ok) {
+      const status = res.status;
+      return {
+        success: false,
+        category:
+          status === 429 ? "rate_limit" : status === 401 || status === 403 ? "auth_error" : status >= 500 ? "server_error" : "bad_request",
+        status,
+        retryable: status === 429 || status >= 500,
+        message: json.error?.message || "The backup photo service could not complete this request.",
+      };
+    }
+    const b64 = json.candidates?.[0]?.content?.parts?.map((p) => p.inlineData?.data || p.inline_data?.data).find(Boolean);
+    if (!b64) {
+      return {
+        success: false,
+        category: "no_image_returned",
+        status: 422,
+        retryable: false,
+        message: "The backup photo service returned no completed image. This request has stopped.",
+      };
+    }
+    return { success: true, b64, category: "success", status: 200, retryable: false };
+  } catch (err: unknown) {
+    return {
+      success: false,
+      category: "network_error",
+      status: 502,
+      retryable: true,
+      message: err instanceof Error ? err.message : "Network error",
+    };
+  }
+}
+
+/** Lovable failures that the owner's backup key can cover (credits, busy, outages). Refusals never fall back. */
+export function shouldUseBackup(res: ProviderResult): boolean {
+  return (
+    res.category === "quota" ||
+    res.category === "rate_limit" ||
+    res.category === "server_error" ||
+    res.category === "network_error" ||
+    res.category === "timeout" ||
+    res.category === "not_configured"
+  );
+}
+
 export async function handleEnhanceRequest(request: Request): Promise<Response> {
   const lovableKey = process.env["LOVABLE_API_KEY"];
+  const geminiKey = process.env["GEMINI_API_KEY"];
 
-  if (!lovableKey) {
+  if (!lovableKey && !geminiKey) {
     logAiEvent("warn", {
       event: "ai_not_configured",
       provider: "lovable",
@@ -236,6 +338,7 @@ export async function handleEnhanceRequest(request: Request): Promise<Response> 
     });
     return Response.json({ code: "not_configured", message: "The photo service key is not configured." }, { status: 503 });
   }
+
 
   const form = await request.formData();
   const image = form.get("image");
@@ -294,27 +397,49 @@ export async function handleEnhanceRequest(request: Request): Promise<Response> 
     }
   }
 
-  const res = await callLovable(lovableKey, image, prompt, refBlob);
-  if (res.success && res.b64) {
+  const primary: ProviderResult = lovableKey
+    ? await callLovable(lovableKey, image, prompt, refBlob)
+    : { success: false, category: "not_configured", status: 503, retryable: false, message: "Primary photo service key is not configured." };
+  if (primary.success && primary.b64) {
     logAiEvent("info", {
       event: "ai_generation_success",
       provider: "lovable",
       scene,
       interaction,
     });
-    return Response.json({ b64: res.b64, provider: "lovable" });
+    return Response.json({ b64: primary.b64, provider: "lovable" });
   }
 
+  const useBackup = !!geminiKey && shouldUseBackup(primary);
   logAiEvent("error", {
     event: "ai_provider_error",
     provider: "lovable",
     scene,
     interaction,
-    category: res.category,
-    status: res.status,
-    fallbackTriggered: false,
-    errorSummary: res.message,
+    category: primary.category,
+    status: primary.status,
+    fallbackTriggered: useBackup,
+    errorSummary: primary.message,
   });
+
+  let res = primary;
+  if (useBackup && geminiKey) {
+    const backup = await callGemini(geminiKey, image, prompt, refBlob);
+    if (backup.success && backup.b64) {
+      logAiEvent("info", { event: "ai_generation_success", provider: "gemini", scene, interaction });
+      return Response.json({ b64: backup.b64, provider: "gemini" });
+    }
+    logAiEvent("error", {
+      event: "ai_provider_error",
+      provider: "gemini",
+      scene,
+      interaction,
+      category: backup.category,
+      status: backup.status,
+      errorSummary: backup.message,
+    });
+    res = backup;
+  }
 
   const finalCategory = res.category;
   const finalStatus = res.status;
