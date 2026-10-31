@@ -397,27 +397,49 @@ export async function handleEnhanceRequest(request: Request): Promise<Response> 
     }
   }
 
-  const res = await callLovable(lovableKey, image, prompt, refBlob);
-  if (res.success && res.b64) {
+  const primary: ProviderResult = lovableKey
+    ? await callLovable(lovableKey, image, prompt, refBlob)
+    : { success: false, category: "not_configured", status: 503, retryable: false, message: "Primary photo service key is not configured." };
+  if (primary.success && primary.b64) {
     logAiEvent("info", {
       event: "ai_generation_success",
       provider: "lovable",
       scene,
       interaction,
     });
-    return Response.json({ b64: res.b64, provider: "lovable" });
+    return Response.json({ b64: primary.b64, provider: "lovable" });
   }
 
+  const useBackup = !!geminiKey && shouldUseBackup(primary);
   logAiEvent("error", {
     event: "ai_provider_error",
     provider: "lovable",
     scene,
     interaction,
-    category: res.category,
-    status: res.status,
-    fallbackTriggered: false,
-    errorSummary: res.message,
+    category: primary.category,
+    status: primary.status,
+    fallbackTriggered: useBackup,
+    errorSummary: primary.message,
   });
+
+  let res = primary;
+  if (useBackup && geminiKey) {
+    const backup = await callGemini(geminiKey, image, prompt, refBlob);
+    if (backup.success && backup.b64) {
+      logAiEvent("info", { event: "ai_generation_success", provider: "gemini", scene, interaction });
+      return Response.json({ b64: backup.b64, provider: "gemini" });
+    }
+    logAiEvent("error", {
+      event: "ai_provider_error",
+      provider: "gemini",
+      scene,
+      interaction,
+      category: backup.category,
+      status: backup.status,
+      errorSummary: backup.message,
+    });
+    res = backup;
+  }
 
   const finalCategory = res.category;
   const finalStatus = res.status;
