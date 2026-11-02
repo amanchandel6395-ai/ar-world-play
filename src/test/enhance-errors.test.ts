@@ -35,7 +35,9 @@ describe("Owner's CometAPI key", () => {
     const response = await handleEnhanceRequest(photoRequest());
     expect(await response.json()).toMatchObject({ provider: "cometapi", b64: "aW1hZ2U=" });
     expect(fetch).toHaveBeenCalledTimes(1);
-    const [url, init] = fetch.mock.calls[0];
+    const call = fetch.mock.calls[0];
+    if (!call) throw new Error("Expected a CometAPI request");
+    const [url, init] = call;
     expect(url).toBe("https://api.cometapi.com/v1/images/edits");
     expect(init.body.get("model")).toBe("gpt-image-2");
     expect(init.body.get("image")).toBeInstanceOf(Blob);
