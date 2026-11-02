@@ -131,23 +131,24 @@ interface ProviderResult {
   message?: string;
 }
 
-/** Call primary Lovable AI provider. */
-async function callLovable(
+/** OpenAI-compatible image edits; provider selection stays server-side. */
+async function callImageEdits(
   key: string,
   imageBlob: Blob,
   prompt: string,
   refBlob: Blob | null,
+  provider: "lovable" | "cometapi" = "lovable",
 ): Promise<ProviderResult> {
   try {
     const out = new FormData();
-    out.append("model", LOVABLE_MODEL);
+    out.append("model", provider === "cometapi" ? "gpt-image-2" : LOVABLE_MODEL);
     out.append("prompt", prompt);
     // Ensure blob is native to the runtime's global FormData context
     const imageBytes = await imageBlob.arrayBuffer();
     const safeImageBlob = new globalThis.Blob([imageBytes], {
       type: imageBlob.type || "image/jpeg",
     });
-    out.append("image[]", safeImageBlob, "capture.jpg");
+    out.append(provider === "cometapi" && !refBlob ? "image" : "image[]", safeImageBlob, "capture.jpg");
     out.append("size", "1024x1536");
     out.append("output_format", "jpeg");
     if (refBlob) {
@@ -158,7 +159,8 @@ async function callLovable(
       out.append("image[]", safeRefBlob, "reference.png");
     }
 
-    const res = await fetch(`${LOVABLE_GATEWAY}/v1/images/edits`, {
+    const baseURL = provider === "cometapi" ? "https://api.cometapi.com" : LOVABLE_GATEWAY;
+    const res = await fetch(`${baseURL}/v1/images/edits`, {
       method: "POST",
       headers: { Authorization: `Bearer ${key}` },
       body: out,
@@ -174,6 +176,7 @@ async function callLovable(
         // Plain-text upstream errors are safe only when they are not HTML pages.
         if (errText && !errText.trimStart().startsWith("<")) message = errText.slice(0, 1000);
       }
+      message = message.split(key).join("[redacted]");
       const status = res.status;
       const category =
         status === 402
@@ -327,8 +330,11 @@ export function shouldUseBackup(res: ProviderResult): boolean {
 export async function handleEnhanceRequest(request: Request): Promise<Response> {
   const lovableKey = process.env["LOVABLE_API_KEY"];
   const geminiKey = process.env["GEMINI_API_KEY"];
+  // The owner saved this key from CometAPI, not from OpenAI directly.
+  const cometKey = process.env["OPENAI_API_KEY"];
+  const primaryProvider = cometKey ? "cometapi" : "lovable";
 
-  if (!lovableKey && !geminiKey) {
+  if (!cometKey && !lovableKey && !geminiKey) {
     logAiEvent("warn", {
       event: "ai_not_configured",
       provider: "lovable",
@@ -397,23 +403,26 @@ export async function handleEnhanceRequest(request: Request): Promise<Response> 
     }
   }
 
-  const primary: ProviderResult = lovableKey
-    ? await callLovable(lovableKey, image, prompt, refBlob)
+  const primary: ProviderResult = cometKey
+    ? await callImageEdits(cometKey, image, prompt, refBlob, "cometapi")
+    : lovableKey
+    ? await callImageEdits(lovableKey, image, prompt, refBlob)
     : { success: false, category: "not_configured", status: 503, retryable: false, message: "Primary photo service key is not configured." };
   if (primary.success && primary.b64) {
     logAiEvent("info", {
       event: "ai_generation_success",
-      provider: "lovable",
+      provider: primaryProvider,
       scene,
       interaction,
     });
-    return Response.json({ b64: primary.b64, provider: "lovable" });
+    return Response.json({ b64: primary.b64, provider: primaryProvider });
   }
 
-  const useBackup = !!geminiKey && shouldUseBackup(primary);
+  // CometAPI requests never silently charge a different service.
+  const useBackup = !cometKey && !!geminiKey && shouldUseBackup(primary);
   logAiEvent("error", {
     event: "ai_provider_error",
-    provider: "lovable",
+    provider: primaryProvider,
     scene,
     interaction,
     category: primary.category,
