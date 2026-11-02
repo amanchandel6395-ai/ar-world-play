@@ -17,7 +17,7 @@
 - AR objects are rendered in three.js from tracking data only; never position AR content with CSS. Why: product requirement for real AR.
 - World AR uses `WorldAR` (WebXR) with capability detection; unsupported devices get an honest fallback, never a faked one.
 - AI image generation runs post-capture only via the `/api/enhance` server route; keys stay server-side.
-- `/api/enhance` uses Lovable AI first and falls back to the owner's `GEMINI_API_KEY` only on credits/busy/outage/missing-key failures, never on refusals or denials. Why: owner wants photos to keep working when credits run out.
+- `/api/enhance` selects CometAPI when the owner's `OPENAI_API_KEY` is configured, without cross-provider fallback; otherwise Lovable AI remains primary with Gemini backup only on credits/busy/outage/missing-key failures, never refusals or denials. Why: owner chose CometAPI spending instead of Lovable AI.
 - Image requests have no timer-driven cancellation and both photo screens display safe service errors; slow generations must not be discarded or account blocks hidden.
 - Shared photos live in the private `captures` bucket; `shares` table is service-role only and accessed via server functions with expiring random tokens.
 - `/selfie` and `/world` are kept as raw engine test pages (linked only in dev mode).

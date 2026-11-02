@@ -1,4 +1,4 @@
-import { afterEach, describe, expect, it, vi } from "vitest";
+import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { DEFAULT_CONFIG } from "@/lib/config";
 import { handleEnhanceRequest } from "@/routes/api/enhance";
 
@@ -14,10 +14,44 @@ function photoRequest() {
   return new Request("http://localhost/api/enhance", { method: "POST", body });
 }
 
+beforeEach(() => {
+  vi.stubEnv("OPENAI_API_KEY", "");
+  vi.stubEnv("LOVABLE_API_KEY", "");
+  vi.stubEnv("GEMINI_API_KEY", "");
+});
+
 afterEach(() => {
   vi.unstubAllEnvs();
   vi.unstubAllGlobals();
   vi.useRealTimers();
+});
+
+describe("Owner's CometAPI key", () => {
+  it("uses CometAPI instead of Lovable when OPENAI_API_KEY is configured", async () => {
+    vi.stubEnv("OPENAI_API_KEY", "comet-test-key");
+    vi.stubEnv("LOVABLE_API_KEY", "lovable-test-key");
+    const fetch = vi.fn().mockResolvedValue(Response.json({ data: [{ b64_json: "aW1hZ2U=" }] }));
+    vi.stubGlobal("fetch", fetch);
+    const response = await handleEnhanceRequest(photoRequest());
+    expect(await response.json()).toMatchObject({ provider: "cometapi", b64: "aW1hZ2U=" });
+    expect(fetch).toHaveBeenCalledTimes(1);
+    const [url, init] = fetch.mock.calls[0];
+    expect(url).toBe("https://api.cometapi.com/v1/images/edits");
+    expect(init.body.get("model")).toBe("gpt-image-2");
+    expect(init.body.get("image")).toBeInstanceOf(Blob);
+    expect(init.body.get("output_format")).toBe("jpeg");
+  });
+
+  it.each([402, 403, 429, 500])("does not silently change services after CometAPI HTTP %s", async (status) => {
+    vi.stubEnv("OPENAI_API_KEY", "comet-test-key");
+    vi.stubEnv("LOVABLE_API_KEY", "lovable-test-key");
+    vi.stubEnv("GEMINI_API_KEY", "gemini-test-key");
+    const fetch = vi.fn().mockResolvedValue(Response.json({ error: { message: "Account action required" } }, { status }));
+    vi.stubGlobal("fetch", fetch);
+    const response = await handleEnhanceRequest(photoRequest());
+    expect(response.status).toBe(status);
+    expect(fetch).toHaveBeenCalledTimes(1);
+  });
 });
 
 describe("Photo generation error recovery", () => {
