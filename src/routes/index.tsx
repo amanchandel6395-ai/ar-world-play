@@ -379,7 +379,7 @@ function Home() {
                 <img
                   src={c.image}
                   alt={c.badge[lang]}
-                  className="h-full w-full object-contain p-2 transition-transform duration-300 group-hover:scale-105"
+                  className="h-full w-full object-cover object-top transition-transform duration-300 group-hover:scale-105"
                   loading="eager"
                 />
               </div>
