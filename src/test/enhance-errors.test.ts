@@ -90,7 +90,23 @@ describe("Photo generation error recovery", () => {
     vi.stubGlobal("fetch", fetch);
     const response = await handleEnhanceRequest(photoRequest());
     expect(response.status).toBe(422);
-    expect(await response.json()).toMatchObject({ message: "Request refused.", retryable: false });
+    expect(await response.json()).toEqual({ code: "request_rejected", retryable: false });
+    expect(fetch).toHaveBeenCalledTimes(1);
+  });
+
+  it("does not reroute a CometAPI refusal and returns a safe recovery code", async () => {
+    vi.stubEnv("OPENAI_API_KEY", "comet-test-key");
+    vi.stubEnv("GEMINI_API_KEY", "backup-test-key");
+    vi.stubEnv("LOVABLE_API_KEY", "lovable-test-key");
+    const fetch = vi.fn().mockResolvedValue(
+      Response.json({ error: { message: "Request blocked by provider policy." } }, { status: 400 }),
+    );
+    vi.stubGlobal("fetch", fetch);
+
+    const response = await handleEnhanceRequest(photoRequest());
+
+    expect(response.status).toBe(400);
+    expect(await response.json()).toEqual({ code: "request_rejected", retryable: false });
     expect(fetch).toHaveBeenCalledTimes(1);
   });
 });

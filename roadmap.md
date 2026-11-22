@@ -1,7 +1,8 @@
 # Roadmap
 
 - [x] Connect saved CometAPI key as the photo provider; catalog returned 200 and actual BJP upload reached CometAPI using gpt-image-2 (12 focused tests passed).
-- [ ] Successful CometAPI photo output: blocked by the provider's safety rejection (HTTP 400); no retries or alternate-provider calls made. Live publication not requested.
+- [ ] Successful Yogi/Modi/BJP AI output: CometAPI rejected the political-image request (HTTP 400). Do not reroute provider refusals; remaining blocker is provider acceptance.
+- [x] Provider refusals now return a safe, non-retryable error; Yogi/Modi users get a direct 3D Room path using the original approved image.
 
 - [x] Homepage: removed "Try the photo booth demo" section + modal and its camera/upload/AI logic; three cards still link to /experience/$scene (yogi, modi, bjp)
 - [x] Experience intro: added Upload Photo alongside Start camera; back-home and setup-incomplete checks preserved

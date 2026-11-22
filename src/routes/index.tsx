@@ -95,6 +95,8 @@ function Home() {
   const [showAi, setShowAi] = useState(false);
   const [aiBusy, setAiBusy] = useState(false);
   const [aiError, setAiError] = useState<string | null>(null);
+  const [canRetryAi, setCanRetryAi] = useState(false);
+  const [roomAlternative, setRoomAlternative] = useState(false);
   const [modalQr, setModalQr] = useState<string | null>(null);
   const [modalQrBusy, setModalQrBusy] = useState(false);
   const shareFn = useServerFn(createShare);
@@ -233,7 +235,10 @@ function Home() {
     if (!photo || aiBusy) return;
     setAiBusy(true);
     setAiError(null);
+    setCanRetryAi(false);
+    setRoomAlternative(false);
     setLastAttempt({ scene, interaction });
+    let retryableOnFailure = true;
     try {
       const image = await (await fetch(photo)).blob();
       const form = new FormData();
@@ -241,10 +246,22 @@ function Home() {
       form.append("scene", scene);
       form.append("interaction", interaction);
       const response = await fetch("/api/enhance", { method: "POST", body: form });
-      const result = (await response.json().catch(() => ({}))) as { b64?: string; code?: string; message?: string };
+      const result = (await response.json().catch(() => ({}))) as {
+        b64?: string;
+        code?: string;
+        message?: string;
+        retryable?: boolean;
+      };
+      retryableOnFailure = result.retryable === true;
+      setCanRetryAi(retryableOnFailure);
       if (!response.ok || !result.b64) {
-        const message =
-          result.code === "not_configured"
+        const rejected = result.code === "request_rejected";
+        setRoomAlternative(rejected);
+        const message = rejected
+          ? isHindi
+            ? "यह फोटो सेवा इस विकल्प को पूरा नहीं कर सकी। असली फ़ोटो वाले 3D Room में कोशिश करें।"
+            : "The photo service could not complete this option. Try the 3D Room with the original photo."
+          : result.code === "not_configured"
             ? isHindi
               ? "AI अभी booth settings में चालू नहीं है।"
               : "AI is not enabled in booth settings yet."
@@ -266,6 +283,7 @@ function Home() {
         }, 100);
       }
     } catch (error) {
+      setCanRetryAi(retryableOnFailure);
       setAiError(
         error instanceof Error ? error.message : isHindi ? "AI edit विफल हुआ।" : "AI edit failed.",
       );
@@ -919,7 +937,7 @@ function Home() {
                 <p role="alert" className="text-center text-sm font-medium text-destructive">
                   {aiError}
                 </p>
-                {lastAttempt && (
+                {canRetryAi && lastAttempt && (
                   <button
                     onClick={() => void enhancePhoto(lastAttempt.scene, lastAttempt.interaction)}
                     disabled={aiBusy}
@@ -928,6 +946,21 @@ function Home() {
                     {isHindi ? "दोबारा प्रयास करें (Retry)" : "Retry"}
                   </button>
                 )}
+                {roomAlternative && lastAttempt &&
+                  (lastAttempt.scene === "yogi" || lastAttempt.scene === "modi") && (
+                    <Link
+                      to="/experience/$scene"
+                      params={{ scene: lastAttempt.scene }}
+                      search={{ room: "1" }}
+                      onClick={() => {
+                        setDeviceMode(boothMode);
+                        setBoothOpen(false);
+                      }}
+                      className="zt-btn-secondary text-xs"
+                    >
+                      {isHindi ? "असली फ़ोटो वाले 3D Room में जाएँ" : "Use the original photo in 3D Room"}
+                    </Link>
+                  )}
               </div>
             )}
           </section>

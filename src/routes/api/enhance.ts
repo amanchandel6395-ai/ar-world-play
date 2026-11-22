@@ -453,7 +453,9 @@ export async function handleEnhanceRequest(request: Request): Promise<Response> 
   const finalCategory = res.category;
   const finalStatus = res.status;
   const code =
-    finalCategory === "quota"
+    finalCategory === "bad_request" || finalCategory === "no_image_returned"
+      ? "request_rejected"
+      : finalCategory === "quota"
       ? "credits"
       : finalCategory === "rate_limit"
         ? "busy"
@@ -463,7 +465,14 @@ export async function handleEnhanceRequest(request: Request): Promise<Response> 
             ? "not_configured"
             : "failed";
 
-  return Response.json({ code, message: res.message, retryable: res.retryable }, { status: finalStatus });
+  return Response.json(
+    {
+      code,
+      retryable: res.retryable,
+      ...(code === "request_rejected" ? {} : { message: res.message }),
+    },
+    { status: finalStatus },
+  );
 }
 
 /**

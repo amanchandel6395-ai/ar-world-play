@@ -80,6 +80,7 @@ export function ResultView({
   allowVideo,
   videoConfigured,
   onRetake,
+  onOpenRoom,
   onHome,
 }: {
   photo: Blob;
@@ -90,6 +91,7 @@ export function ResultView({
   /** admin switched video on but it has not passed an end-to-end test yet */
   videoConfigured?: boolean;
   onRetake: () => void;
+  onOpenRoom: () => void;
   onHome: () => void;
 }) {
   const [selectedInteraction, setSelectedInteraction] = useState<InteractionId>(initialInteraction);
@@ -97,6 +99,8 @@ export function ResultView({
   const [showAi, setShowAi] = useState(false);
   const [aiBusy, setAiBusy] = useState(false);
   const [msg, setMsg] = useState<string | null>(null);
+  const [canRetry, setCanRetry] = useState(false);
+  const [roomAlternative, setRoomAlternative] = useState(false);
   const [qr, setQr] = useState<string | null>(null);
   const [qrBusy, setQrBusy] = useState(false);
   const share = useServerFn(createShare);
@@ -196,6 +200,12 @@ export function ResultView({
         ? t.aiCredits
         : code === "busy" || code === "rate_limit"
           ? t.aiBusy
+        : code === "request_rejected"
+          ? kind === "ai"
+            ? isHindi
+              ? "यह फोटो सेवा इस विकल्प को पूरा नहीं कर सकी। असली फ़ोटो वाले 3D Room में कोशिश करें।"
+              : "The photo service could not complete this option. Try the 3D Room with the original photo."
+            : t.videoFail
           : kind === "ai"
             ? t.aiFail
             : t.videoFail;
@@ -245,6 +255,9 @@ export function ResultView({
     if (ix) setSelectedInteraction(ix);
     setAiBusy(true);
     setMsg(null);
+    setCanRetry(false);
+    setRoomAlternative(false);
+    let retryableOnFailure = true;
     try {
       const fd = new FormData();
       fd.append("image", photo, "capture.jpg");
@@ -252,7 +265,14 @@ export function ResultView({
       fd.append("interaction", targetIx);
       const res = await fetch("/api/enhance", { method: "POST", body: fd });
       if (!res.ok) {
-        const j = (await res.json().catch(() => ({}))) as { code?: string; message?: string };
+        const j = (await res.json().catch(() => ({}))) as {
+          code?: string;
+          message?: string;
+          retryable?: boolean;
+        };
+        retryableOnFailure = j.retryable === true;
+        setCanRetry(retryableOnFailure);
+        setRoomAlternative(j.code === "request_rejected" && sceneId !== "bjp");
         throw new Error(j.message || codeMsg(j.code, "ai"));
       }
       const { b64 } = (await res.json()) as { b64?: string };
@@ -262,6 +282,7 @@ export function ResultView({
       setShowAi(true);
       setQr(null);
     } catch (e) {
+      setCanRetry(retryableOnFailure);
       setMsg(e instanceof Error && e.message ? e.message : "AI enhancement failed.");
     } finally {
       setAiBusy(false);
@@ -564,9 +585,14 @@ export function ResultView({
         {msg && (
           <div className="flex flex-col items-center gap-2 rounded-2xl border border-destructive/40 bg-destructive/10 p-3">
             <p className="text-center text-sm font-medium text-destructive">{msg}</p>
-            {allowAi && !aiPhoto && (
+            {allowAi && !aiPhoto && canRetry && !roomAlternative && (
               <button onClick={() => void enhance()} disabled={aiBusy} className="zt-btn-secondary text-xs">
                 {t.retry}
+              </button>
+            )}
+            {roomAlternative && (
+              <button onClick={onOpenRoom} className="zt-btn-secondary text-xs">
+                {isHindi ? "असली फ़ोटो वाले 3D Room में जाएँ" : "Use the original photo in 3D Room"}
               </button>
             )}
           </div>

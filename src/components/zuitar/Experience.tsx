@@ -231,6 +231,10 @@ export function Experience({ sceneId }: { sceneId: SceneId }) {
         allowAi={!!config?.ai.imageReady || !!config?.ai.imageEnabled}
         allowVideo={!!config?.ai.videoReady}
         videoConfigured={!!config?.ai.videoEnabled}
+        onOpenRoom={() => {
+          setPhoto(null);
+          setPhase("world");
+        }}
         onRetake={() => {
           setPhoto(null);
           setPhase("live");
