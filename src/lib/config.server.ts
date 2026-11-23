@@ -117,35 +117,6 @@ export async function loadConfig(): Promise<AppConfig> {
 
 export async function saveConfig(cfg: AppConfig) {
   memoryConfig = cfg;
-  try {
-    const sb = await admin();
-    if (sb) {
-      // Whitelist only allowed safe fields to prevent mass assignment of protected fields
-      const safeData = {
-        characters: cfg.characters,
-        bjp: cfg.bjp,
-        interactions: cfg.interactions,
-        brand: cfg.brand,
-        candidates: cfg.candidates ?? [],
-        demo: cfg.demo,
-        ai: {
-          imageEnabled: Boolean(cfg.ai?.imageEnabled),
-          videoEnabled: false,
-          videoVerifiedAt: null,
-          videoJobs: [],
-          videoDuration: cfg.ai?.videoDuration || 6,
-          bjpImagePrompt: cfg.ai?.bjpImagePrompt || "",
-          bjpVideoPrompt: cfg.ai?.bjpVideoPrompt || "",
-        },
-      };
-      const { error } = await sb
-        .from("app_config")
-        .upsert({ id: "main", data: safeData as never, updated_at: new Date().toISOString() });
-      if (error) console.warn("Supabase upsert failed:", error.message);
-    }
-  } catch {
-    // Supabase unavailable; saved in memory
-  }
 }
 
 export async function signPath(path: string | null, ttl = 6 * 3600): Promise<string | null> {
