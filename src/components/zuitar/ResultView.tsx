@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useRef, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import QRCode from "qrcode";
 import { useServerFn } from "@tanstack/react-start";
 import { createShare } from "@/lib/share.functions";
@@ -203,8 +203,8 @@ export function ResultView({
         : code === "request_rejected"
           ? kind === "ai"
             ? isHindi
-              ? "यह फोटो सेवा इस विकल्प को पूरा नहीं कर सकी। असली फ़ोटो वाले 3D Room में कोशिश करें।"
-              : "The photo service could not complete this option. Try the 3D Room with the original photo."
+              ? "चुनी गई फोटो सेवा ने इस विकल्प को अपने नियमों के तहत रोक दिया। इसे दूसरी सेवा पर नहीं भेजा गया; आपकी मूल फ़ोटो उपलब्ध है।"
+              : "The selected photo service declined this option under its rules. It was not sent to another service; your original photo is still available."
             : t.videoFail
           : kind === "ai"
             ? t.aiFail
@@ -224,10 +224,16 @@ export function ResultView({
     };
   }, [base, slogan]);
   const current = slogan && withText ? withText : base;
-  const url = useMemo(() => URL.createObjectURL(current), [current]);
-  useEffect(() => () => URL.revokeObjectURL(url), [url]);
+  const [preview, setPreview] = useState<{ blob: Blob; url: string } | null>(null);
+  useEffect(() => {
+    const objectUrl = URL.createObjectURL(current);
+    setPreview({ blob: current, url: objectUrl });
+    return () => URL.revokeObjectURL(objectUrl);
+  }, [current]);
+  const url = preview?.blob === current ? preview.url : null;
 
   const download = () => {
+    if (!url) return;
     const a = document.createElement("a");
     a.href = url;
     a.download = showAi ? "zuitar-ai-generated.jpg" : "zuitar-photo.jpg";
@@ -344,7 +350,7 @@ export function ResultView({
     <div className="flex min-h-dvh flex-col bg-stage lg:flex-row">
       <div className="relative flex flex-1 items-center justify-center p-4 lg:p-8">
         <img
-          src={url}
+          src={url ?? undefined}
           alt="Your ZUITAR photo"
           className="max-h-[70dvh] w-auto max-w-full rounded-2xl shadow-2xl lg:max-h-[88dvh]"
         />

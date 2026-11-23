@@ -259,8 +259,8 @@ function Home() {
         setRoomAlternative(rejected);
         const message = rejected
           ? isHindi
-            ? "यह फोटो सेवा इस विकल्प को पूरा नहीं कर सकी। असली फ़ोटो वाले 3D Room में कोशिश करें।"
-            : "The photo service could not complete this option. Try the 3D Room with the original photo."
+            ? "चुनी गई फोटो सेवा ने इस विकल्प को अपने नियमों के तहत रोक दिया। इसे दूसरी सेवा पर नहीं भेजा गया; आपकी मूल फ़ोटो उपलब्ध है।"
+            : "The selected photo service declined this option under its rules. It was not sent to another service; your original photo is still available."
           : result.code === "not_configured"
             ? isHindi
               ? "AI अभी booth settings में चालू नहीं है।"
