@@ -9,13 +9,14 @@ import { useLang } from "@/lib/i18n";
 import { getEnhancePrompt } from "@/lib/enhance-prompt";
 
 export const CAMPAIGN_SLOGANS = [
+  "अबकी बार 400 पार, मोदी-योगी सरकार",
   "एक भारत, श्रेष्ठ भारत 🇮🇳",
-  "मोदी की गारंटी ✦",
-  "विकसित भारत @ 2047 🇮🇳",
+  "विकास भी, विरासत भी 🚩",
   "सबका साथ, सबका विकास, सबका विश्वास 🌸",
-  "जय श्री राम 🚩",
+  "मोदी की गारंटी ✦",
+  "जय श्री राम · विकसित भारत संकल्प 🚩",
   "सेवा, सुशासन और गरीब कल्याण",
-  "अबकी बार 400 पार ✦",
+  "बुलडोज़र बाबा की जय · सुशासन और सुरक्षा",
 ];
 
 async function stampSloganOnBlob(
@@ -102,8 +103,6 @@ export function ResultView({
   sceneId,
   interaction: initialInteraction,
   allowAi,
-  allowVideo,
-  videoConfigured,
   candidate,
   onRetake,
   onHome,
@@ -112,9 +111,6 @@ export function ResultView({
   sceneId: SceneId;
   interaction: InteractionId;
   allowAi: boolean;
-  allowVideo: boolean;
-  /** admin switched video on but it has not passed an end-to-end test yet */
-  videoConfigured?: boolean;
   candidate?: Candidate;
   onRetake: () => void;
   onHome: () => void;
@@ -149,10 +145,14 @@ export function ResultView({
   );
 
   useEffect(() => {
-    setBoothMode(
+    const isBooth =
       new URLSearchParams(window.location.search).get("mode") === "booth" ||
-        localStorage.getItem("zuitar.deviceMode") === "booth",
-    );
+      localStorage.getItem("zuitar.deviceMode") === "booth";
+    setBoothMode(isBooth);
+    if (isBooth) {
+      // In booth mode, generate the QR code automatically for phone transfer
+      void makeQr();
+    }
   }, []);
 
   const sceneOptions: Array<{
@@ -160,50 +160,22 @@ export function ResultView({
     icon: string;
     label: { en: string; hi: string };
   }> =
-    sceneId === "modi"
+    sceneId === "yogi"
       ? [
-          {
-            id: "selfie",
-            icon: "🤳",
-            label: { en: "Selfie with PM Modi", hi: "पीएम मोदी जी के साथ सेल्फ़ी" },
-          },
-          {
-            id: "handshake",
-            icon: "🤝",
-            label: { en: "Handshake with Modi", hi: "मोदी जी से हाथ मिलाएँ" },
-          },
-          { id: "hug", icon: "🫂", label: { en: "Hug with Modi", hi: "मोदी जी से गले मिलें" } },
-          {
-            id: "meeting",
-            icon: "💬",
-            label: { en: "Meeting with Modi", hi: "मोदी जी से मुलाक़ात" },
-          },
-          { id: "scarf", icon: "🧣", label: { en: "Saffron Scarf Honor", hi: "अंगवस्त्र सम्मान" } },
+          { id: "selfie", icon: "🤳", label: { en: "Live Selfie with Yogi Ji", hi: "योगी जी के साथ सेल्फ़ी" } },
+          { id: "handshake", icon: "🤝", label: { en: "Handshake with Yogi Ji", hi: "योगी जी से हाथ मिलाएँ" } },
+          { id: "hug", icon: "🫂", label: { en: "Warm Hug / Respect", hi: "योगी जी से स्नेह व आशीर्वाद" } },
+          { id: "meeting", icon: "💬", label: { en: "Official Meeting", hi: "योगी जी के साथ बैठक व चर्चा" } },
+          { id: "scarf", icon: "🧣", label: { en: "Saffron Scarf Honor", hi: "भगवा अंगवस्त्र पहनाना" } },
           { id: "gift", icon: "🎁", label: { en: "Presenting Gift / Memento", hi: "स्मृति चिन्ह / उपहार भेंट" } },
         ]
-      : sceneId === "yogi"
+      : sceneId === "modi"
         ? [
-            {
-              id: "selfie",
-              icon: "🤳",
-              label: { en: "Selfie with CM Yogi", hi: "सीएम योगी जी के साथ सेल्फ़ी" },
-            },
-            {
-              id: "handshake",
-              icon: "🤝",
-              label: { en: "Handshake with Yogi", hi: "योगी जी से हाथ मिलाएँ" },
-            },
-            { id: "hug", icon: "🫂", label: { en: "Hug with Yogi", hi: "योगी जी से गले मिलें" } },
-            {
-              id: "meeting",
-              icon: "💬",
-              label: { en: "Meeting with Yogi", hi: "योगी जी से मुलाक़ात" },
-            },
-            {
-              id: "scarf",
-              icon: "🧣",
-              label: { en: "Saffron Scarf Honor", hi: "अंगवस्त्र सम्मान" },
-            },
+            { id: "selfie", icon: "🤳", label: { en: "Live Selfie with Modi Ji", hi: "मोदी जी के साथ सेल्फ़ी" } },
+            { id: "handshake", icon: "🤝", label: { en: "Handshake with Modi Ji", hi: "मोदी जी से हाथ मिलाएँ" } },
+            { id: "hug", icon: "🫂", label: { en: "Warm Hug / Affection", hi: "मोदी जी से आत्मीय गले मिलना" } },
+            { id: "meeting", icon: "💬", label: { en: "Official High-Level Meeting", hi: "मोदी जी के साथ बैठक व संवाद" } },
+            { id: "scarf", icon: "🧣", label: { en: "Ceremonial Scarf Honor", hi: "अंगवस्त्र पहनाकर सम्मान" } },
             {
               id: "gift",
               icon: "🎁",
@@ -216,33 +188,7 @@ export function ResultView({
             { id: "gift", icon: "🎁", label: { en: "Ceremonial Memento", hi: "स्मृति चिन्ह व सम्मान" } },
             { id: "event", icon: "🚩", label: { en: "BJP Flag Style", hi: "भाजपा ध्वज लुक" } },
           ];
-  const [video, setVideo] = useState<{
-    state: "idle" | "busy" | "ready";
-    url?: string;
-    progress?: number | null;
-  }>({ state: "idle" });
-  const [videoMsg, setVideoMsg] = useState<string | null>(null);
-  const alive = useRef(true);
-  const pollTimer = useRef<number | undefined>(undefined);
-  useEffect(() => {
-    alive.current = true;
-    return () => {
-      alive.current = false;
-      window.clearTimeout(pollTimer.current);
-    };
-  }, []);
-  const codeMsg = (code: string | undefined, kind: "ai" | "video") =>
-    code === "not_configured"
-      ? kind === "ai"
-        ? t.aiNotSetup
-        : t.videoNotSetup
-      : code === "credits" || code === "quota_exceeded"
-        ? t.aiCredits
-        : code === "busy" || code === "rate_limit"
-          ? t.aiBusy
-          : kind === "ai"
-            ? t.aiFail
-            : t.videoFail;
+
   useIdleReset(KIOSK.resultTimeoutMs, onHome);
 
   const current = showAi && aiPhoto ? aiPhoto : photo;
@@ -320,8 +266,9 @@ export function ResultView({
     setQrBusy(true);
     setMsg(null);
     try {
+      const stamped = await stampSloganOnBlob(current, selectedSlogan, candidateEndorsement);
       const { token } = await share({
-        data: { imageBase64: await toBase64(current), aiGenerated: showAi },
+        data: { imageBase64: await toBase64(stamped), aiGenerated: showAi },
       });
       const link = `${window.location.origin}/r/${token}`;
       setQr(await QRCode.toDataURL(link, { width: 640, margin: 1 }));
@@ -338,88 +285,65 @@ export function ResultView({
     setAiBusy(true);
     setMsg(null);
     try {
-      const prompt = getEnhancePrompt(sceneId, targetIx);
-      let generatedBlob: Blob | null = null;
+      let b64: string | null = null;
       let lastError: Error | null = null;
 
-      // --- Tier 1: Puter.js (Client-side Gemini 2.5 Flash / 3 Pro Image) ---
+      // 1. Try internal backend API (/api/enhance)
       try {
-        let puterInstance = typeof window !== "undefined" ? (window as any).puter : undefined;
-        if (!puterInstance && typeof window !== "undefined") {
-          if (!(window as any).puter) {
-            await new Promise<void>((resolve, reject) => {
-              const existingScript = document.querySelector('script[src*="puter.com"]');
-              if (existingScript) {
-                existingScript.addEventListener("load", () => resolve());
-                existingScript.addEventListener("error", () => reject(new Error("Failed to load Puter.js")));
-                if ((window as any).puter) return resolve();
-              } else {
-                const s = document.createElement("script");
-                s.src = "https://js.puter.com/v2/";
-                s.onload = () => resolve();
-                s.onerror = () => reject(new Error("Failed to load Puter.js"));
-                document.head.appendChild(s);
-              }
-            });
-          }
-          puterInstance = (window as any).puter;
+        const fd = new FormData();
+        fd.append("image", photo, "capture.jpg");
+        fd.append("scene", sceneId);
+        fd.append("interaction", targetIx);
+        const res = await fetch("/api/enhance", { method: "POST", body: fd });
+        if (res.ok) {
+          const j = (await res.json().catch(() => ({}))) as { b64?: string; error?: string };
+          if (j.b64) b64 = j.b64;
+          else if (j.error) lastError = new Error(j.error);
         }
-
-        if (puterInstance?.ai?.txt2img) {
-          try {
-            const img = await puterInstance.ai.txt2img(prompt, {
-              model: "google/gemini-2.5-flash-image",
-            });
-            if (img?.src) {
-              const res = await fetch(img.src);
-              generatedBlob = await res.blob();
-            }
-          } catch (e1) {
-            console.warn("Puter gemini-2.5-flash-image failed, trying fallback model:", e1);
-            const imgFallback = await puterInstance.ai.txt2img(prompt, {
-              model: "google/gemini-3-pro-image",
-            });
-            if (imgFallback?.src) {
-              const res = await fetch(imgFallback.src);
-              generatedBlob = await res.blob();
-            }
-          }
-        }
-      } catch (puterErr) {
-        console.warn("Puter AI generation failed, falling back to backend API:", puterErr);
-        lastError = puterErr instanceof Error ? puterErr : new Error("Puter AI failed");
+      } catch (e) {
+        console.warn("Backend /api/enhance failed, trying client-side AI fallback...", e);
       }
 
-      // --- Tier 2: Backend API Fallback (/api/enhance) ---
-      if (!generatedBlob) {
+      // 2. Client-side Puter.js fallback
+      if (!b64 && typeof window !== "undefined") {
         try {
-          const fd = new FormData();
-          fd.append("image", photo, "capture.jpg");
-          fd.append("scene", sceneId);
-          fd.append("interaction", targetIx);
-          const res = await fetch("/api/enhance", { method: "POST", body: fd });
-          if (res.ok) {
-            const { b64 } = (await res.json()) as { b64: string };
-            if (b64) {
-              const bin = Uint8Array.from(atob(b64), (c) => c.charCodeAt(0));
-              generatedBlob = new Blob([bin], { type: "image/jpeg" });
+          const prompt = getEnhancePrompt(sceneId, targetIx);
+          const puter = (window as any).puter;
+          if (puter?.ai?.txt2img) {
+            const imgEl = await puter.ai.txt2img(prompt);
+            if (imgEl && imgEl.src && imgEl.src.startsWith("data:image")) {
+              b64 = imgEl.src.split(",")[1];
             }
-          } else {
-            const j = (await res.json().catch(() => ({}))) as { code?: string };
-            throw new Error(codeMsg(j.code, "ai"));
           }
-        } catch (backendErr) {
-          console.error("Backend API enhancement fallback failed:", backendErr);
-          if (!lastError) lastError = backendErr instanceof Error ? backendErr : new Error("AI enhancement failed.");
+        } catch (e) {
+          console.warn("Puter fallback failed:", e);
         }
       }
 
-      if (generatedBlob) {
-        setAiPhoto(generatedBlob);
+      // 3. Client-side Polling / HuggingFace fallback
+      if (!b64) {
+        try {
+          const prompt = encodeURIComponent(getEnhancePrompt(sceneId, targetIx));
+          const pollinationsUrl = `https://image.pollinations.ai/prompt/${prompt}?width=1024&height=1024&nologo=true&seed=${Math.floor(Math.random() * 100000)}`;
+          const pollRes = await fetch(pollinationsUrl);
+          if (pollRes.ok) {
+            const pollBlob = await pollRes.blob();
+            b64 = await toBase64(pollBlob);
+          }
+        } catch (e) {
+          console.warn("Pollinations fallback failed:", e);
+        }
+      }
+
+      if (b64) {
+        const bin = atob(b64);
+        const arr = new Uint8Array(bin.length);
+        for (let i = 0; i < bin.length; i++) arr[i] = bin.charCodeAt(i);
+        setAiPhoto(new Blob([arr], { type: "image/jpeg" }));
         setShowAi(true);
         setQr(null);
       } else {
-        throw lastError || new Error("All AI image generation providers failed.");
+        throw lastError || new Error("AI image generation temporary unavailable. Original photo is ready!");
       }
     } catch (e) {
       console.error("AI image generation error:", e);
@@ -429,71 +353,23 @@ export function ResultView({
     }
   };
 
-  const makeVideo = async () => {
-    setVideo({ state: "busy", progress: null });
-    setVideoMsg(null);
-    const fail = (m: string) => {
-      if (!alive.current) return;
-      setVideo({ state: "idle" });
-      setVideoMsg(m);
-    };
-    try {
-      const fd = new FormData();
-      fd.append("image", photo, "capture.jpg");
-      fd.append("scene", sceneId);
-      fd.append("interaction", interaction);
-      const res = await fetch("/api/video", { method: "POST", body: fd });
-      const j = (await res.json().catch(() => ({}))) as { id?: string; code?: string };
-      if (!res.ok || !j.id) return fail(codeMsg(j.code, "video"));
-      const id = j.id;
-      const deadline = Date.now() + 6 * 60_000;
-      const poll = async () => {
-        if (!alive.current) return;
-        if (Date.now() > deadline) return fail(t.videoFail);
-        try {
-          const r = await fetch(`/api/video?id=${encodeURIComponent(id)}`);
-          const p = (await r.json().catch(() => ({}))) as {
-            status?: string;
-            url?: string | null;
-            progress?: number | null;
-            code?: string;
-          };
-          if (!alive.current) return;
-          if (!r.ok) {
-            if (r.status === 429 || r.status >= 500)
-              pollTimer.current = window.setTimeout(poll, 8000);
-            else fail(codeMsg(p.code, "video"));
-            return;
-          }
-          if (p.status === "completed" && p.url) return setVideo({ state: "ready", url: p.url });
-          if (p.status === "failed") return fail(t.videoFail);
-          setVideo({ state: "busy", progress: p.progress ?? null });
-          pollTimer.current = window.setTimeout(poll, 6000);
-        } catch {
-          pollTimer.current = window.setTimeout(poll, 8000);
-        }
-      };
-      pollTimer.current = window.setTimeout(poll, 5000);
-    } catch {
-      fail(t.videoFail);
-    }
-  };
-
   return (
-    <div className="flex min-h-dvh flex-col bg-stage lg:flex-row">
-      <div className="relative flex flex-1 items-center justify-center p-4 lg:p-8">
+    <div className="flex min-h-dvh flex-col lg:flex-row bg-background text-foreground">
+      <div className="relative flex min-h-[50dvh] flex-1 items-center justify-center overflow-hidden bg-black/90 p-4">
         <img
           src={url}
-          alt="Your ZUITAR photo"
-          className="max-h-[70dvh] w-auto max-w-full rounded-2xl shadow-2xl lg:max-h-[88dvh]"
+          alt={showAi ? t.aiGenerated : t.capture}
+          className="max-h-[80dvh] w-auto max-w-full rounded-2xl object-contain shadow-2xl"
         />
+
+        {/* Candidate Badge overlay */}
         {candidate && (
-          <div className="absolute top-6 left-6 z-10 flex items-center gap-2 rounded-full border border-primary/50 bg-black/80 px-3.5 py-1.5 backdrop-blur-md shadow-lg">
+          <div className="absolute left-6 top-6 flex items-center gap-2 rounded-full border border-primary/50 bg-black/75 px-3 py-1.5 shadow-lg backdrop-blur-md">
             {candidate.photoUrl && (
               <img
                 src={candidate.photoUrl}
                 alt=""
-                className="h-6 w-6 rounded-full border border-primary object-cover"
+                className="h-7 w-7 rounded-full border border-primary object-cover"
               />
             )}
             <span className="text-xs font-bold text-white">
@@ -501,6 +377,8 @@ export function ResultView({
             </span>
           </div>
         )}
+
+        {/* Selected Slogan Banner overlay */}
         {selectedSlogan && (
           <div className="absolute inset-x-6 bottom-8 mx-auto max-w-md rounded-2xl border border-primary/40 bg-black/85 px-4 py-2.5 text-center shadow-2xl backdrop-blur-md">
             <p className="text-xs sm:text-sm font-bold tracking-wide text-white drop-shadow">
@@ -513,41 +391,47 @@ export function ResultView({
             )}
           </div>
         )}
+
         {showAi && (
-          <span className="absolute left-6 top-6 rounded-full bg-warning px-4 py-1.5 text-sm font-bold uppercase tracking-wider text-background lg:left-12 lg:top-12">
+          <span className="absolute right-6 top-6 rounded-full bg-warning px-4 py-1.5 text-xs font-bold uppercase tracking-wider text-background">
             {t.aiGenerated}
           </span>
         )}
+
         {aiBusy && (
-          <div className="absolute inset-0 flex items-center justify-center">
-            <div className="rounded-2xl bg-overlay px-6 py-4 text-lg">Enhancing with AI…</div>
+          <div className="absolute inset-0 flex items-center justify-center bg-black/60 backdrop-blur-xs">
+            <div className="flex items-center gap-3 rounded-2xl bg-black/85 border border-primary/40 px-6 py-4 text-white text-base font-semibold shadow-xl">
+              <div className="h-5 w-5 animate-spin rounded-full border-2 border-muted border-t-primary" />
+              <span>{isHindi ? "AI फोटो तैयार कर रहा है…" : "Enhancing with AI…"}</span>
+            </div>
           </div>
         )}
       </div>
 
-      <div className="flex w-full flex-col gap-3 p-4 pb-8 lg:w-[26rem] lg:justify-center lg:p-8">
-        {qr ? (
-          <div className="flex flex-col items-center gap-3 rounded-2xl bg-card p-5 text-center">
+      {/* Control Actions & Social Sharing Sidebar */}
+      <div className="flex w-full flex-col gap-3.5 p-4 pb-8 lg:w-[26rem] lg:justify-center lg:p-8">
+        {qr && boothMode ? (
+          <div className="flex flex-col items-center gap-3 rounded-2xl bg-card border border-border p-5 text-center shadow-md">
             <span className="text-3xl">📱</span>
-            <p className="text-xl font-bold">
+            <p className="text-lg sm:text-xl font-bold">
               {isHindi ? "फ़ोन से QR कोड स्कैन करें" : "Scan QR with your phone"}
             </p>
             <p className="text-xs text-muted-foreground">
               {isHindi
-                ? "कैमरा खोलकर स्कैन करें, फ़ोटो आपके फ़ोन में खुल जाएगी और डाउनलोड हो जाएगी।"
+                ? "कैमरा खोलकर स्कैन करें, फ़ोटो आपके फ़ोन में खुल जाएगी और सीधे डाउनलोड हो जाएगी।"
                 : "Open your mobile camera to scan and download the photo to your phone."}
             </p>
             <img
               src={qr}
               alt="QR code to download your photo"
-              className="w-64 rounded-xl bg-foreground p-3 lg:w-72 shadow-lg"
+              className="w-56 sm:w-64 rounded-xl bg-foreground p-3 shadow-lg"
             />
             <p className="text-xs text-muted-foreground">{t.expires}</p>
-            <div className="flex gap-2 mt-2">
-              <button onClick={() => setQr(null)} className="zt-btn-ghost">
+            <div className="flex gap-2 mt-2 w-full">
+              <button onClick={() => setQr(null)} className="zt-btn-ghost flex-1">
                 ✕ {t.close}
               </button>
-              <button onClick={onRetake} className="zt-btn-secondary">
+              <button onClick={onRetake} className="zt-btn-secondary flex-1">
                 🔄 {t.retake}
               </button>
             </div>
@@ -555,15 +439,15 @@ export function ResultView({
         ) : (
           <>
             {/* Direct Social Share & Download Actions */}
-            <div className="flex flex-col gap-2 rounded-2xl border border-border bg-card/60 p-3.5 shadow-sm">
+            <div className="flex flex-col gap-2 rounded-2xl border border-border bg-card/60 p-3.5 shadow-xs">
               <p className="text-xs font-bold uppercase tracking-wider text-primary">
-                {isHindi ? "शेयर और डाउनलोड करें:" : "Share & Download:"}
+                {isHindi ? "डाउनलोड एवं सोशल शेयरिंग:" : "Download & Social Sharing:"}
               </p>
               <div className="grid grid-cols-2 gap-2">
                 <button
                   type="button"
                   onClick={download}
-                  className="zt-btn-primary flex items-center justify-center gap-1.5 py-2.5 text-xs font-bold"
+                  className="zt-btn-primary flex items-center justify-center gap-1.5 py-2.5 text-xs font-bold shadow-sm"
                 >
                   <span>⬇️</span>
                   <span>{isHindi ? "डाउनलोड करें" : "Download"}</span>
@@ -591,13 +475,13 @@ export function ResultView({
                   className="zt-btn-secondary flex items-center justify-center gap-1.5 py-2.5 text-xs font-semibold"
                 >
                   <span>📱</span>
-                  <span>{qrBusy ? t.creating : (isHindi ? "फोन में भेजें (QR)" : "QR Code")}</span>
+                  <span>{qrBusy ? "..." : (isHindi ? "फोन में भेजें (QR)" : "QR Code")}</span>
                 </button>
               </div>
             </div>
 
             {/* Campaign Slogans Picker */}
-            <div className="flex flex-col gap-2 rounded-2xl border border-border bg-card/60 p-3 shadow-sm">
+            <div className="flex flex-col gap-2 rounded-2xl border border-border bg-card/60 p-3 shadow-xs">
               <div className="flex items-center justify-between">
                 <p className="text-xs font-bold uppercase tracking-wider text-primary">
                   {isHindi ? "अभियान स्लोगन / नारा चुनें:" : "Campaign Slogan:"}
@@ -620,7 +504,7 @@ export function ResultView({
                     onClick={() => setSelectedSlogan(selectedSlogan === s ? null : s)}
                     className={`shrink-0 rounded-full border px-3 py-1.5 text-xs font-medium transition-all cursor-pointer ${
                       selectedSlogan === s
-                        ? "border-primary bg-primary text-primary-foreground font-bold shadow-sm"
+                        ? "border-primary bg-primary text-primary-foreground font-bold shadow-xs"
                         : "border-border/70 hover:bg-muted text-foreground"
                     }`}
                   >
@@ -630,6 +514,7 @@ export function ResultView({
               </div>
             </div>
 
+            {/* Navigation buttons: Retake & Home */}
             <div className="grid grid-cols-2 gap-2.5">
               <button onClick={onRetake} className="zt-btn-secondary flex items-center justify-center gap-1.5 py-2.5 text-xs font-medium">
                 <span>🔄</span>
@@ -641,31 +526,32 @@ export function ResultView({
               </button>
             </div>
 
+            {/* AI Feature Enhancement Studio */}
             {allowAi && (
-              <div className="flex flex-col gap-2.5 rounded-2xl border border-border bg-card/60 p-3.5 shadow-sm">
+              <div className="flex flex-col gap-2.5 rounded-2xl border border-border bg-card/60 p-3.5 shadow-xs">
                 <div className="flex items-center justify-between">
                   <p className="text-xs font-bold uppercase tracking-wider text-primary">
-                    {isHindi ? "1. फीचर चुनें (Meeting, Selfie, Gift):" : "1. Choose Feature:"}
+                    {isHindi ? "AI दृश्य बदलें (Selfie, Scarf, Gift):" : "Change Interaction:"}
                   </p>
                   <span className="text-[11px] text-muted-foreground">
                     {sceneOptions.length} {isHindi ? "विकल्प" : "options"}
                   </span>
                 </div>
-                <div className="flex flex-col gap-1.5 max-h-[36vh] overflow-y-auto pr-1">
+                <div className="flex flex-col gap-1.5 max-h-[30vh] overflow-y-auto pr-1">
                   {sceneOptions.map((opt) => (
                     <button
                       key={opt.id}
                       type="button"
                       onClick={() => setSelectedInteraction(opt.id)}
                       disabled={aiBusy}
-                      className={`flex items-center justify-between rounded-xl border px-3 py-2 text-sm font-medium transition-all ${
+                      className={`flex items-center justify-between rounded-xl border px-3 py-2 text-xs sm:text-sm font-medium transition-all ${
                         selectedInteraction === opt.id
-                          ? "border-primary bg-primary/15 text-primary font-bold ring-2 ring-primary/40 shadow-sm"
+                          ? "border-primary bg-primary/15 text-primary font-bold ring-2 ring-primary/40 shadow-xs"
                           : "border-border/60 hover:bg-muted text-foreground"
                       } disabled:opacity-50`}
                     >
                       <span className="flex items-center gap-2.5">
-                        <span className="text-xl">{opt.icon}</span>
+                        <span className="text-lg">{opt.icon}</span>
                         <span>{opt.label[lang]}</span>
                       </span>
                       {selectedInteraction === opt.id ? (
@@ -681,9 +567,9 @@ export function ResultView({
 
                 <button
                   type="button"
-                  onClick={() => void enhance(selectedInteraction)}
+                  onClick={() => enhance(selectedInteraction)}
                   disabled={aiBusy}
-                  className="zt-btn-primary mt-1 py-3 text-base font-bold flex items-center justify-center gap-2 w-full shadow-lg"
+                  className="zt-btn-primary flex items-center justify-center gap-2 py-2.5 text-sm font-bold shadow-md w-full"
                 >
                   <span>✦</span>
                   <span>
@@ -694,72 +580,24 @@ export function ResultView({
                 </button>
               </div>
             )}
+
             {aiPhoto && (
               <button
                 onClick={() => {
                   setShowAi((v) => !v);
                   setQr(null);
                 }}
-                className="zt-btn-ghost border border-border"
+                className="zt-btn-ghost border border-border text-xs py-2"
               >
-                {showAi ? "Show original photo" : "Show AI-generated version"}
+                {showAi ? (isHindi ? "मूल फ़ोटो देखें" : "Show original photo") : (isHindi ? "AI फ़ोटो देखें" : "Show AI-generated version")}
               </button>
             )}
-            {allowVideo && video.state === "idle" && (
-              <button onClick={makeVideo} className="zt-btn-ghost border border-border">
-                ▶ {t.makeVideo}
-              </button>
-            )}
-            {!allowVideo && videoConfigured && (
-              <p className="rounded-2xl border border-border px-4 py-3 text-center text-sm text-muted-foreground">
-                {t.videoUnavailable}
-              </p>
-            )}
-            {video.state === "busy" && (
-              <div className="flex items-center gap-3 rounded-2xl bg-card p-4">
-                <div className="h-6 w-6 shrink-0 animate-spin rounded-full border-4 border-muted border-t-primary" />
-                <p className="text-sm">
-                  {t.videoWorking}
-                  {typeof video.progress === "number" ? ` ${Math.round(video.progress)}%` : ""}
-                </p>
-              </div>
-            )}
-            {video.state === "ready" && video.url && (
-              <div className="flex flex-col gap-2 rounded-2xl bg-card p-3">
-                <div className="relative">
-                  <video
-                    src={video.url}
-                    controls
-                    playsInline
-                    className="mx-auto max-h-[50dvh] rounded-xl"
-                    aria-label={t.videoReady}
-                  />
-                  <span className="absolute left-2 top-2 rounded-full bg-warning px-3 py-1 text-xs font-bold uppercase text-background">
-                    {t.aiGenerated}
-                  </span>
-                </div>
-                <a
-                  href={video.url}
-                  download="zuitar-ai-video.mp4"
-                  target="_blank"
-                  rel="noreferrer"
-                  className="zt-btn-secondary text-center"
-                >
-                  {t.downloadVideo}
-                </a>
-              </div>
-            )}
-            {videoMsg && <p className="text-center text-destructive">{videoMsg}</p>}
           </>
         )}
+
         {msg && (
-          <div className="flex flex-col items-center gap-2 rounded-2xl border border-destructive/40 bg-destructive/10 p-3">
-            <p className="text-center text-sm font-medium text-destructive">{msg}</p>
-            {allowAi && !aiPhoto && (
-              <button onClick={enhance} disabled={aiBusy} className="zt-btn-secondary text-xs">
-                {t.retry}
-              </button>
-            )}
+          <div className="flex flex-col items-center gap-2 rounded-2xl border border-primary/40 bg-primary/10 p-3">
+            <p className="text-center text-xs sm:text-sm font-medium text-foreground">{msg}</p>
           </div>
         )}
       </div>

@@ -8,6 +8,7 @@ import type { PublicConfig, Candidate } from "@/lib/config";
 import type { SceneId } from "@/ar/scenes";
 import { useDevMode } from "@/lib/kiosk";
 import { LangToggleLabel, useLang } from "@/lib/i18n";
+import { resolveCandidateFromEnv } from "@/lib/candidateResolver";
 
 export const Route = createFileRoute("/")({
   head: () => ({
@@ -43,10 +44,10 @@ const cards: {
     kicker: "selfieWith",
     tone: "from-amber-600/30 via-orange-500/15 to-card",
     image: "/assets/yogi.png",
-    title: { en: "Selfie with CM Yogi", hi: "सेल्फ़ी सीएम योगी के साथ" },
-    badge: { en: "CM Yogi Adityanath", hi: "मुख्यमंत्री योगी आदित्यनाथ" },
+    title: { en: "Selfie with CM Yogi Ji", hi: "सेल्फ़ी सीएम योगी जी के साथ" },
+    badge: { en: "CM Yogi Ji", hi: "मुख्यमंत्री योगी आदित्यनाथ जी" },
     desc: {
-      en: "Live selfie, handshake, meeting, scarf & gift with CM Yogi",
+      en: "Live selfie, handshake, meeting, scarf & gift with CM Yogi Ji",
       hi: "लाइव सेल्फ़ी, हाथ मिलाना, मुलाक़ात, अंगवस्त्र व उपहार भेंट",
     },
   },
@@ -55,8 +56,8 @@ const cards: {
     kicker: "selfieWith",
     tone: "from-orange-500/30 via-amber-500/15 to-card",
     image: "/assets/modi.png",
-    title: { en: "Selfie with PM Modi", hi: "सेल्फ़ी पीएम मोदी के साथ" },
-    badge: { en: "PM Narendra Modi", hi: "प्रधानमंत्री नरेंद्र मोदी" },
+    title: { en: "Selfie with PM Modi Ji", hi: "सेल्फ़ी पीएम मोदी जी के साथ" },
+    badge: { en: "PM Modi Ji", hi: "प्रधानमंत्री नरेंद्र मोदी जी" },
     desc: {
       en: "Live selfie, handshake, hug, meeting, scarf & gift with PM Modi",
       hi: "लाइव सेल्फ़ी, हाथ मिलाना, गले मिलना, मुलाक़ात, अंगवस्त्र व उपहार भेंट",
@@ -114,8 +115,11 @@ function Home() {
   const isHindi = lang === "hi";
   const displayedPhoto = showAi && aiPhoto ? aiPhoto : photo;
 
-  const candidateId = typeof window !== "undefined" ? new URLSearchParams(window.location.search).get("candidate") : null;
-  const currentCandidate = candidates.find((c) => c.id === candidateId && c.active);
+  const currentCandidate = resolveCandidateFromEnv(
+    typeof window !== "undefined" ? window.location.search : undefined,
+    candidates
+  );
+  const candidateId = currentCandidate?.id || (typeof window !== "undefined" ? new URLSearchParams(window.location.search).get("candidate") : null);
 
   useEffect(() => {
     setBoothMode(
@@ -424,11 +428,11 @@ function Home() {
 
             {/* Picture + Title Showcase */}
             <div className="my-5 flex flex-col items-center text-center">
-              <div className="relative mb-4 flex h-44 w-44 items-center justify-center overflow-hidden rounded-2xl border-2 border-border/80 bg-background/50 shadow-inner group-hover:border-primary/60 group-hover:shadow-lg transition-all">
+              <div className="relative mb-4 flex h-52 w-52 sm:h-56 sm:w-56 items-center justify-center overflow-hidden rounded-2xl border-2 border-border/80 bg-black/10 shadow-md group-hover:border-primary/60 group-hover:shadow-xl transition-all">
                 <img
                   src={c.image}
                   alt={c.badge[lang]}
-                  className="h-full w-full object-contain p-2 transition-transform duration-300 group-hover:scale-105"
+                  className="h-full w-full object-cover object-top transition-transform duration-300 group-hover:scale-105"
                   loading="eager"
                 />
               </div>
@@ -436,61 +440,76 @@ function Home() {
               <p className="mt-1.5 text-xs text-muted-foreground md:text-sm">{c.desc[lang]}</p>
             </div>
 
-            {/* Action Buttons: Live Selfie, Upload Photo, Video */}
+            {/* Action Buttons: Booth Mode vs Phone Mode */}
             <div className="mt-2 flex flex-col gap-2 pt-3 border-t border-border/60">
-              <div className={`grid ${boothMode ? "grid-cols-2" : "grid-cols-3"} gap-2`}>
-                <Link
-                  to="/experience/$scene"
-                  params={{ scene: c.id }}
-                  search={{
-                    ...(boothMode ? { mode: "booth" as const } : {}),
-                    ...(candidateId ? { candidate: candidateId } : {}),
-                  }}
-                  onClick={() =>
-                    localStorage.setItem("zuitar.deviceMode", boothMode ? "booth" : "personal")
-                  }
-                  className="zt-btn-primary flex items-center justify-center gap-1 py-2.5 text-xs sm:text-sm font-semibold text-center"
-                >
-                  <span>🤳</span>
-                  <span>{boothMode ? (isHindi ? "सेल्फ़ी लें" : "Take Selfie") : (isHindi ? "लाइव सेल्फ़ी" : "Live Selfie")}</span>
-                </Link>
-
-                {!boothMode && (
-                  <label className="zt-btn-secondary flex items-center justify-center gap-1 py-2.5 text-xs sm:text-sm font-semibold cursor-pointer text-center">
-                    <span>📁</span>
-                    <span>{isHindi ? "फोटो अपलोड" : "Upload Photo"}</span>
-                    <input
-                      type="file"
-                      accept="image/*"
-                      className="sr-only"
-                      onChange={(event) => {
-                        const file = event.currentTarget.files?.[0];
-                        if (file) {
-                          setSelectedModalScene(c.id as "modi" | "yogi" | "bjp");
-                          setBoothOpen(true);
-                          void choosePhoto(file);
-                        }
-                        event.currentTarget.value = "";
+              <div className="grid grid-cols-2 gap-2">
+                {boothMode ? (
+                  <>
+                    <Link
+                      to="/experience/$scene"
+                      params={{ scene: c.id }}
+                      search={{
+                        mode: "booth" as const,
+                        ...(candidateId ? { candidate: candidateId } : {}),
                       }}
-                    />
-                  </label>
-                )}
+                      onClick={() =>
+                        localStorage.setItem("zuitar.deviceMode", "booth")
+                      }
+                      className="zt-btn-primary flex items-center justify-center gap-1.5 py-3 text-xs sm:text-sm font-bold text-center shadow-lg"
+                    >
+                      <span>🤳</span>
+                      <span>{isHindi ? "लाइव सेल्फ़ी लें" : "Take Live Selfie"}</span>
+                    </Link>
 
-                <Link
-                  to="/experience/$scene"
-                  params={{ scene: c.id }}
-                  search={{
-                    ...(boothMode ? { mode: "booth" as const } : {}),
-                    ...(candidateId ? { candidate: candidateId } : {}),
-                  }}
-                  onClick={() =>
-                    localStorage.setItem("zuitar.deviceMode", boothMode ? "booth" : "personal")
-                  }
-                  className="zt-btn-ghost border border-border flex items-center justify-center gap-1 py-2.5 text-xs sm:text-sm font-semibold text-center"
-                >
-                  <span>🎥</span>
-                  <span>{isHindi ? "वीडियो" : "Video"}</span>
-                </Link>
+                    <button
+                      type="button"
+                      onClick={() => {
+                        setSelectedModalScene(c.id as "modi" | "yogi" | "bjp");
+                        setBoothOpen(true);
+                      }}
+                      className="zt-btn-secondary flex items-center justify-center gap-1.5 py-3 text-xs sm:text-sm font-bold text-center shadow-md border border-amber-500/40"
+                    >
+                      <span>✨</span>
+                      <span>{isHindi ? "AI फोटो बनाएं" : "AI Photo Studio"}</span>
+                    </button>
+                  </>
+                ) : (
+                  <>
+                    <Link
+                      to="/experience/$scene"
+                      params={{ scene: c.id }}
+                      search={{
+                        ...(candidateId ? { candidate: candidateId } : {}),
+                      }}
+                      onClick={() =>
+                        localStorage.setItem("zuitar.deviceMode", "personal")
+                      }
+                      className="zt-btn-primary flex items-center justify-center gap-1.5 py-3 text-xs sm:text-sm font-bold text-center shadow-lg"
+                    >
+                      <span>🤳</span>
+                      <span>{isHindi ? "लाइव सेल्फ़ी" : "Live Selfie"}</span>
+                    </Link>
+
+                    <label className="zt-btn-secondary flex items-center justify-center gap-1.5 py-3 text-xs sm:text-sm font-bold cursor-pointer text-center shadow-md border border-amber-500/40">
+                      <span>📁</span>
+                      <span>{isHindi ? "फोटो अपलोड" : "Upload Photo"}</span>
+                      <input
+                        type="file"
+                        accept="image/*"
+                        className="sr-only"
+                        onChange={(event) => {
+                          const file = event.currentTarget.files?.[0];
+                          if (file) {
+                            setSelectedModalScene(c.id as "modi" | "yogi" | "bjp");
+                            setBoothOpen(true);
+                            void choosePhoto(file);
+                          }
+                          event.currentTarget.value = "";
+                        }}
+                      />
+                    </label>
+                  </>
+                )}
               </div>
             </div>
           </div>
@@ -684,6 +703,58 @@ function Home() {
                             <span>⬇️</span>
                             <span>{isHindi ? "डाउनलोड" : "Download photo"}</span>
                           </a>
+                          <button
+                            type="button"
+                            onClick={async () => {
+                              try {
+                                const currentSrc = displayedPhoto ?? photo;
+                                if (!currentSrc) return;
+                                const blob = await (await fetch(currentSrc)).blob();
+                                const file = new File([blob], "campaign-selfie.jpg", { type: "image/jpeg" });
+                                if (navigator.canShare && navigator.canShare({ files: [file] })) {
+                                  await navigator.share({
+                                    files: [file],
+                                    title: "Bolta Poster Campaign",
+                                    text: `Meri Photo | Bolta Poster Campaign - ${window.location.origin}`
+                                  });
+                                  return;
+                                }
+                                const text = encodeURIComponent(`Bolta Poster Campaign! Dekhein: ${window.location.origin}`);
+                                window.open(`https://api.whatsapp.com/send?text=${text}`, "_blank");
+                              } catch {}
+                            }}
+                            className="rounded-xl bg-emerald-600 hover:bg-emerald-500 text-white font-bold flex items-center justify-center gap-1.5 px-3 py-2 text-xs shadow-md transition-all active:scale-95"
+                          >
+                            <span>💬</span>
+                            <span>WhatsApp</span>
+                          </button>
+                          <button
+                            type="button"
+                            onClick={async () => {
+                              try {
+                                const currentSrc = displayedPhoto ?? photo;
+                                if (!currentSrc) return;
+                                const blob = await (await fetch(currentSrc)).blob();
+                                const file = new File([blob], "instagram-story.jpg", { type: "image/jpeg" });
+                                if (navigator.canShare && navigator.canShare({ files: [file] })) {
+                                  await navigator.share({
+                                    files: [file],
+                                    title: "Instagram Story",
+                                    text: `#BoltaPoster #ZUITAR ${window.location.origin}`
+                                  });
+                                  return;
+                                }
+                                if (navigator.clipboard) {
+                                  await navigator.clipboard.writeText(`#BoltaPoster #ZUITAR ${window.location.origin}`);
+                                }
+                                alert(isHindi ? "फ़ोटो डाउनलोड हो गई! Instagram खोलकर Story में लगाएं 📸" : "Photo ready! Open Instagram to share to story 📸");
+                              } catch {}
+                            }}
+                            className="rounded-xl bg-gradient-to-r from-purple-600 via-pink-600 to-amber-500 hover:opacity-90 text-white font-bold flex items-center justify-center gap-1.5 px-3 py-2 text-xs shadow-md transition-all active:scale-95"
+                          >
+                            <span>📸</span>
+                            <span>Instagram</span>
+                          </button>
                           <button
                             onClick={() => void makeModalQrWithPhoto()}
                             disabled={modalQrBusy}

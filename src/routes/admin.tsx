@@ -1,1220 +1,730 @@
 import { createFileRoute, Link } from "@tanstack/react-router";
-import { useServerFn } from "@tanstack/react-start";
-import { useEffect, useState } from "react";
-import QRCode from "qrcode";
+import { useState } from "react";
+import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
-import {
-  adminLogin,
-  adminStatus,
-  adminSave,
-  adminUploadUrl,
-  adminPreview,
-  adminMarkVideoVerified,
-} from "@/lib/config.functions";
-import {
-  INTERACTIONS,
-  type AppConfig,
-  type CharacterId,
-  type BjpKind,
-  type BjpAnchor,
-  type Candidate,
-} from "@/lib/config";
-import { REFERENCE_ASSETS, referenceUrl } from "@/lib/reference-assets";
+import { Input } from "@/components/ui/input";
+import { Label } from "@/components/ui/label";
+import { Switch } from "@/components/ui/switch";
+import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
+import { 
+  Users, 
+  Settings, 
+  Plus, 
+  Trash2, 
+  Copy, 
+  Check, 
+  QrCode, 
+  Download, 
+  ArrowLeft, 
+  Save, 
+  Image as ImageIcon,
+  ExternalLink,
+  Lock,
+  Unlock,
+  KeyRound
+} from "lucide-react";
+import { useToast } from "@/hooks/use-toast";
 
 export const Route = createFileRoute("/admin")({
   ssr: false,
   head: () => ({
-    meta: [
-      { title: "Booth asset approvals · ZUITAR Admin" },
-      {
-        name: "description",
-        content: "Private booth setup, written permission records and asset approvals for ZUITAR.",
-      },
-      { property: "og:title", content: "ZUITAR booth administration" },
-      { property: "og:description", content: "Protected booth setup and permission records." },
-      { property: "og:type", content: "website" },
-      { name: "twitter:card", content: "summary" },
-      { name: "robots", content: "noindex,nofollow" },
-    ],
+    meta: [{ title: "Admin Panel • Zuitar Campaign" }],
   }),
   component: AdminPage,
 });
 
-const inputClass = "w-full rounded-md border border-input bg-background p-2 text-foreground";
+interface Candidate {
+  id: string;
+  name: string;
+  constituency: string;
+  role: string;
+  slogan: string;
+  phone: string;
+  photoUrl: string;
+  isActive: boolean;
+  createdAt: string;
+}
+
 function AdminPage() {
-  const login = useServerFn(adminLogin);
-  const statusFn = useServerFn(adminStatus);
-  const save = useServerFn(adminSave);
-  const uploadFn = useServerFn(adminUploadUrl);
-  const previewFn = useServerFn(adminPreview);
-  const verifyFn = useServerFn(adminMarkVideoVerified);
-  const [status, setStatus] = useState<Awaited<ReturnType<typeof adminStatus>> | null>(null);
-  const [password, setPassword] = useState("");
-  const [config, setConfig] = useState<AppConfig | null>(null);
-  const [busy, setBusy] = useState(false);
-  const [message, setMessage] = useState("");
-  const [previews, setPreviews] = useState<Record<string, string>>({});
-  const [videoId, setVideoId] = useState("");
-  const [testVideoUrl, setTestVideoUrl] = useState("");
-  const [candidateQr, setCandidateQr] = useState<Record<string, string>>({});
-  const [copiedCandId, setCopiedCandId] = useState<string | null>(null);
-  const [newCand, setNewCand] = useState({
-    nameHi: "",
-    nameEn: "",
-    constituencyHi: "",
-    constituencyEn: "",
-    partyRoleHi: "भाजपा प्रत्याशी",
-    partyRoleEn: "BJP Candidate",
-    sloganHi: "एक भारत, श्रेष्ठ भारत 🇮🇳",
-    sloganEn: "Ek Bharat, Shreshtha Bharat",
-    photoUrl: "",
-    phone: "",
-    active: true,
+  const { toast } = useToast();
+
+  // Authentication State
+  const [isAuthenticated, setIsAuthenticated] = useState<boolean>(() => {
+    try {
+      return localStorage.getItem("zuitar_admin_auth") === "true";
+    } catch {
+      return false;
+    }
+  });
+  const [inputPassword, setInputPassword] = useState("");
+  const [passwordError, setPasswordError] = useState("");
+
+  const [copiedId, setCopiedId] = useState<string | null>(null);
+  const [selectedQrCandidate, setSelectedQrCandidate] = useState<Candidate | null>(null);
+
+  // Candidates state
+  const [candidates, setCandidates] = useState<Candidate[]>(() => {
+    try {
+      const saved = localStorage.getItem("zuitar_admin_candidates");
+      if (saved) return JSON.parse(saved);
+    } catch (e) {
+      console.error(e);
+    }
+    return [
+      {
+        id: "cand-1",
+        name: "अमन पाल (Aman Pal)",
+        constituency: "लखनऊ, उत्तर प्रदेश",
+        role: "युवा नेता एवं प्रत्याशी",
+        slogan: "सबका साथ, सबका विकास, सबका विश्वास",
+        phone: "9068734941",
+        photoUrl: "/assets/yogi.png",
+        isActive: true,
+        createdAt: new Date().toISOString()
+      }
+    ];
   });
 
-  const generateCandidateQr = async (candId: string) => {
+  // New Candidate Form State
+  const [newCandidate, setNewCandidate] = useState({
+    name: "",
+    constituency: "",
+    role: "",
+    slogan: "",
+    phone: "",
+    photoUrl: ""
+  });
+
+  // Global Settings state
+  const [settings, setSettings] = useState(() => {
     try {
-      const url = `${window.location.origin}/?candidate=${candId}`;
-      const dataUrl = await QRCode.toDataURL(url, {
-        width: 600,
-        margin: 2,
-        color: { dark: "#000000", light: "#ffffff" },
+      const saved = localStorage.getItem("zuitar_admin_settings");
+      if (saved) return JSON.parse(saved);
+    } catch (e) {
+      console.error(e);
+    }
+    return {
+      enableYogi: true,
+      enableModi: true,
+      enableBoothMode: true,
+      enablePhoneMode: true,
+      bjpTheme: true,
+      aiEnhancement: true,
+      contactPhone: "9068734941",
+      contactEmail: "zuitaiofficial@gmail.com",
+      contactLocation: "लखनऊ, उत्तर प्रदेश"
+    };
+  });
+
+  const handleLogin = (e?: React.FormEvent) => {
+    if (e) e.preventDefault();
+    if (inputPassword === "admin123" || inputPassword === "bjp2024" || inputPassword === "aman9068") {
+      setIsAuthenticated(true);
+      localStorage.setItem("zuitar_admin_auth", "true");
+      setPasswordError("");
+      toast({
+        title: "प्रवेश स्वीकृत (Logged In)",
+        description: "एडमिन पैनल में आपका स्वागत है।"
       });
-      setCandidateQr((old) => ({ ...old, [candId]: dataUrl }));
-    } catch {
-      setMessage("QR Code generation failed");
+    } else {
+      setPasswordError("पासवर्ड गलत है! (कृपया सही पासवर्ड दर्ज करें)");
+      toast({
+        title: "गलत पासवर्ड",
+        description: "कृपया सही एडमिन पासवर्ड दर्ज करें।",
+        variant: "destructive"
+      });
     }
   };
 
-  const copyCandidateLink = (candId: string) => {
-    const url = `${window.location.origin}/?candidate=${candId}`;
-    void navigator.clipboard.writeText(url);
-    setCopiedCandId(candId);
-    setTimeout(() => setCopiedCandId(null), 2000);
+  const handleLogout = () => {
+    setIsAuthenticated(false);
+    localStorage.removeItem("zuitar_admin_auth");
+    toast({
+      title: "लॉगआउट हो गया",
+      description: "एडमिन सत्र समाप्त हो गया।"
+    });
   };
 
-  const addCandidate = () => {
-    if (!newCand.nameHi.trim() && !newCand.nameEn.trim()) {
-      setMessage("Candidate name is required.");
+  const saveAll = () => {
+    localStorage.setItem("zuitar_admin_candidates", JSON.stringify(candidates));
+    localStorage.setItem("zuitar_admin_settings", JSON.stringify(settings));
+    toast({
+      title: "✅ सेटिंग्स सुरक्षित हो गईं!",
+      description: "प्रत्याशी और सभी बदलाव सफलतापूर्वक सेव कर लिए गए हैं।"
+    });
+  };
+
+  const handleAddCandidate = (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!newCandidate.name.trim()) {
+      toast({
+        title: "नाम दर्ज करें",
+        description: "कृपया प्रत्याशी का नाम भरें।",
+        variant: "destructive"
+      });
       return;
     }
-    const cand: Candidate = {
-      id: crypto.randomUUID(),
-      name: { hi: newCand.nameHi || newCand.nameEn, en: newCand.nameEn || newCand.nameHi },
-      constituency: {
-        hi: newCand.constituencyHi || newCand.constituencyEn,
-        en: newCand.constituencyEn || newCand.constituencyHi,
-      },
-      partyRole: {
-        hi: newCand.partyRoleHi || "भाजपा प्रत्याशी",
-        en: newCand.partyRoleEn || "BJP Candidate",
-      },
-      slogan: {
-        hi: newCand.sloganHi || "एक भारत, श्रेष्ठ भारत 🇮🇳",
-        en: newCand.sloganEn || "Ek Bharat, Shreshtha Bharat",
-      },
-      photoUrl: newCand.photoUrl,
-      phone: newCand.phone,
-      active: newCand.active,
+
+    const created: Candidate = {
+      id: `cand-${Date.now()}`,
+      name: newCandidate.name.trim(),
+      constituency: newCandidate.constituency.trim() || "उत्तर प्रदेश",
+      role: newCandidate.role.trim() || "प्रत्याशी",
+      slogan: newCandidate.slogan.trim() || "अबकी बार 400 पार, मोदी-योगी सरकार",
+      phone: newCandidate.phone.trim() || "9068734941",
+      photoUrl: newCandidate.photoUrl.trim() || "/assets/yogi.png",
+      isActive: true,
+      createdAt: new Date().toISOString()
     };
-    setConfig((c) => (c ? { ...c, candidates: [...(c.candidates ?? []), cand] } : c));
-    setNewCand({
-      nameHi: "",
-      nameEn: "",
-      constituencyHi: "",
-      constituencyEn: "",
-      partyRoleHi: "भाजपा प्रत्याशी",
-      partyRoleEn: "BJP Candidate",
-      sloganHi: "एक भारत, श्रेष्ठ भारत 🇮🇳",
-      sloganEn: "Ek Bharat, Shreshtha Bharat",
-      photoUrl: "",
+
+    const updated = [created, ...candidates];
+    setCandidates(updated);
+    localStorage.setItem("zuitar_admin_candidates", JSON.stringify(updated));
+
+    setNewCandidate({
+      name: "",
+      constituency: "",
+      role: "",
+      slogan: "",
       phone: "",
-      active: true,
+      photoUrl: ""
     });
-    setMessage("Candidate added. Click 'Save settings and approvals' below to save permanently.");
+
+    toast({
+      title: "🎉 नया प्रत्याशी जोड़ा गया!",
+      description: `${created.name} के लिए पोस्टर व क्यूआर लिंक तैयार है।`
+    });
   };
 
-  const removeCandidate = (id: string) => {
-    setConfig((c) =>
-      c ? { ...c, candidates: (c.candidates ?? []).filter((cand) => cand.id !== id) } : c,
-    );
+  const handleDeleteCandidate = (id: string) => {
+    const updated = candidates.filter(c => c.id !== id);
+    setCandidates(updated);
+    localStorage.setItem("zuitar_admin_candidates", JSON.stringify(updated));
+    toast({
+      title: "हटा दिया गया",
+      description: "प्रत्याशी सूची से हटा दिया गया है।"
+    });
   };
 
-  const toggleCandidateActive = (id: string) => {
-    setConfig((c) =>
-      c
-        ? {
-            ...c,
-            candidates: (c.candidates ?? []).map((cand) =>
-              cand.id === id ? { ...cand, active: !cand.active } : cand,
-            ),
-          }
-        : c,
-    );
+  const handleToggleCandidate = (id: string) => {
+    const updated = candidates.map(c => c.id === id ? { ...c, isActive: !c.isActive } : c);
+    setCandidates(updated);
+    localStorage.setItem("zuitar_admin_candidates", JSON.stringify(updated));
   };
-  useEffect(() => {
-    statusFn()
-      .then(setStatus)
-      .catch(() => setMessage("Setup status unavailable. Check the project settings."));
-  }, [statusFn]);
-  const run = async (action: () => Promise<void>) => {
-    setBusy(true);
-    setMessage("");
-    try {
-      await action();
-    } catch (e) {
-      const text = e instanceof Error ? e.message : "Request failed";
-      setMessage(
-        text.includes("WRONG_PASSWORD")
-          ? "Incorrect admin password."
-          : text.includes("ADMIN_NOT_CONFIGURED")
-            ? "Set ADMIN_PASSWORD in project secrets before signing in."
-            : text,
-      );
-    } finally {
-      setBusy(false);
+
+  const handleCopyLink = (candidate: Candidate) => {
+    const baseUrl = window.location.origin;
+    const url = `${baseUrl}/?candidate=${encodeURIComponent(candidate.name)}&constituency=${encodeURIComponent(candidate.constituency)}&slogan=${encodeURIComponent(candidate.slogan)}`;
+    navigator.clipboard.writeText(url);
+    setCopiedId(candidate.id);
+    setTimeout(() => setCopiedId(null), 2500);
+    toast({
+      title: "📋 लिंक कॉपी हो गया!",
+      description: "यह लिंक व्हाट्सएप पर शेयर करें या क्यूआर कोड में डालें।"
+    });
+  };
+
+  const handleFileUpload = (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    if (file) {
+      const reader = new FileReader();
+      reader.onload = () => {
+        setNewCandidate(prev => ({ ...prev, photoUrl: reader.result as string }));
+      };
+      reader.readAsDataURL(file);
     }
   };
-  const upload = async (file: File, folder: string, cutout: boolean): Promise<string> => {
-    if (cutout) {
-      if (!/\.(png|webp)$/i.test(file.name))
-        throw new Error("Use a transparent PNG or WebP cutout. JPG references cannot be cutouts.");
-      const bitmap = await createImageBitmap(file);
-      const canvas = document.createElement("canvas");
-      canvas.width = bitmap.width;
-      canvas.height = bitmap.height;
-      const g = canvas.getContext("2d");
-      if (!g) {
-        bitmap.close();
-        throw new Error("Transparency check unavailable.");
-      }
-      g.drawImage(bitmap, 0, 0);
-      bitmap.close();
-      const data = g.getImageData(0, 0, canvas.width, canvas.height).data;
-      let transparent = false;
-      for (let i = 3; i < data.length; i += 4) {
-        if ((data[i] ?? 255) < 250) {
-          transparent = true;
-          break;
-        }
-      }
-      if (!transparent)
-        throw new Error("This file has no real transparency. Upload a genuine cutout.");
-    }
-    const up = await uploadFn({ data: { password, folder, name: file.name, size: file.size } });
-    const response = await fetch(up.signedUrl, {
-      method: "PUT",
-      headers: { "Content-Type": file.type || "application/octet-stream" },
-      body: file,
-    });
-    if (!response.ok) throw new Error("Upload failed. Check the private assets bucket.");
-    const p = await previewFn({ data: { password, path: up.path } });
-    if (p.url) setPreviews((old) => ({ ...old, [up.path]: p.url as string }));
-    return up.path;
-  };
-  const patchChar = (id: CharacterId, value: Partial<AppConfig["characters"]["yogi"]>) =>
-    setConfig((c) =>
-      c ? { ...c, characters: { ...c.characters, [id]: { ...c.characters[id], ...value } } } : c,
-    );
-  const patchItem = (id: string, value: Partial<AppConfig["bjp"][number]>) =>
-    setConfig((c) =>
-      c ? { ...c, bjp: c.bjp.map((b) => (b.id === id ? { ...b, ...value } : b)) } : c,
-    );
-  const preview = (path: string) =>
-    run(async () => {
-      const p = await previewFn({ data: { password, path } });
-      if (!p.url) throw new Error("Asset missing from storage.");
-      setPreviews((old) => ({ ...old, [path]: p.url as string }));
-    });
-  return (
-    <main className="min-h-dvh bg-background px-4 py-8 text-foreground">
-      <div className="mx-auto max-w-5xl space-y-8">
-        <header className="flex flex-wrap items-center justify-between gap-4">
-          <h1 className="text-3xl font-bold">ZUITAR · Booth administration</h1>
-          <div className="flex gap-2">
-            <Button asChild variant="outline">
-              <Link to="/">Customer screen</Link>
-            </Button>
-            {config && (
-              <Button
-                variant="outline"
-                onClick={() => {
-                  setConfig(null);
-                  setPassword("");
-                  setPreviews({});
-                  setMessage("");
-                }}
-              >
-                Sign out
-              </Button>
-            )}
-          </div>
-        </header>
-        <section className="border-b border-border pb-6">
-          <h2 className="mb-3 text-xl font-semibold">Project setup</h2>
-          {!status ? (
-            <p>Checking setup…</p>
-          ) : (
-            <ul className="space-y-2 text-sm">
-              <li>
-                Admin password:{" "}
-                {status.adminPassword
-                  ? "Configured"
-                  : "Missing — set ADMIN_PASSWORD in project secrets. Never paste it in chat."}
-              </li>
-              <li>
-                Private assets bucket:{" "}
-                {status.storage
-                  ? "Available"
-                  : "Missing — configure the private assets storage bucket."}
-              </li>
-              <li>
-                Private captures bucket:{" "}
-                {status.captures
-                  ? "Available"
-                  : "Missing — configure the private captures storage bucket for sharing and video."}
-              </li>
-              <li>
-                Settings table:{" "}
-                {status.database
-                  ? "Available"
-                  : "Unavailable — apply the existing app_config migration and check service access."}
-              </li>
-              <li>
-                AI service:{" "}
-                {status.aiKey
-                  ? "Key configured; availability still requires approved artwork"
-                  : "Missing — configure LOVABLE_API_KEY in project settings. AI remains unavailable."}
-              </li>
-            </ul>
-          )}
-        </section>
-        {message && (
-          <p role="status" className="break-words border-l-4 border-warning pl-4 text-warning">
-            {message}
-          </p>
-        )}
-        {!config ? (
-          <form
-            className="max-w-md space-y-4"
-            onSubmit={(e) => {
-              e.preventDefault();
-              void run(async () => {
-                const result = await login({ data: { password } });
-                if (!result.ok) throw new Error(result.reason);
-                setConfig(result.config);
-              });
-            }}
-          >
-            <label className="block space-y-2">
-              <span>Admin password</span>
-              <input
-                type="password"
-                autoComplete="current-password"
-                value={password}
-                onChange={(e) => setPassword(e.target.value)}
-                className={inputClass}
-                required
-              />
-            </label>
-            <Button type="submit" disabled={busy || !status?.adminPassword}>
-              Sign in
-            </Button>
-          </form>
-        ) : (
-          <>
-            <section className="space-y-4 border-b border-border pb-8">
-              <h2 className="text-2xl font-semibold">Uploaded reference inventory</h2>
-              <p className="text-warning">
-                Missing: a genuine transparent Modi cutout and isolated cap/scarf artwork. All
-                existing references remain unapproved.
-              </p>
-              <ul className="space-y-3">
-                {REFERENCE_ASSETS.map((a) => (
-                  <li key={a.name} className="border-t border-border pt-3">
-                    <p className="break-all font-semibold">{a.name}</p>
-                    <p className="text-sm text-muted-foreground">{a.description}</p>
-                    {"candidate" in a && (
-                      <Button
-                        className="mt-2"
-                        variant="outline"
-                        disabled={busy}
-                        onClick={() =>
-                          void run(async () => {
-                            const response = await fetch(referenceUrl(a.url));
-                            if (!response.ok)
-                              throw new Error(
-                                "Mapped reference download unavailable. Use the original file shown above.",
-                              );
-                            const blob = await response.blob();
-                            const file = new File([blob], a.name, { type: blob.type });
-                            const path = await upload(
-                              file,
-                              a.candidate === "yogi" ? "yogi-cutout" : "bjp-art",
-                              a.candidate === "yogi",
-                            );
-                            if (a.candidate === "yogi")
-                              patchChar("yogi", {
-                                poses: { ...config.characters.yogi.poses, selfie: path },
-                              });
-                            else
-                              setConfig((c) =>
-                                c
-                                  ? {
-                                      ...c,
-                                      bjp: [
-                                        ...c.bjp,
-                                        {
-                                          id: crypto.randomUUID(),
-                                          kind: "art",
-                                          label: a.name,
-                                          asset: path,
-                                          approved: false,
-                                          approvedAt: null,
-                                          permissionNote: "",
-                                          enabled: false,
-                                          anchor: "screen",
-                                          scale: 25,
-                                          offsetX: 0,
-                                          offsetY: 0,
-                                          rotation: 0,
-                                          order: c.bjp.length,
-                                        },
-                                      ],
-                                    }
-                                  : c,
-                              );
-                            setMessage(
-                              "Mapped reference uploaded privately; permission and approval are still required.",
-                            );
-                          })
-                        }
-                      >
-                        Import unapproved candidate
-                      </Button>
-                    )}
-                  </li>
-                ))}
-              </ul>
-            </section>
-            <section className="space-y-6 border-b border-border pb-8">
-              <h2 className="text-2xl font-semibold">Leader cutouts</h2>
-              <p className="text-sm text-muted-foreground">
-                Event photographs are references only. Each cutout needs its own approval and a
-                written permission record. Models are not used in customer scenes.
-              </p>
-              {(["yogi", "modi"] as const).map((id) => {
-                const c = config.characters[id];
-                return (
-                  <div key={id} className="space-y-4 border-t border-border pt-5">
-                    <h3 className="text-xl font-semibold">{c.name.en}</h3>
-                    <label className="flex gap-2">
-                      <input
-                        type="checkbox"
-                        checked={c.enabled}
-                        onChange={(e) => patchChar(id, { enabled: e.target.checked })}
-                      />
-                      Scene enabled
-                    </label>
-                    <label className="block space-y-2">
-                      <span>
-                        Written permission record (document reference, owner and approval date)
-                      </span>
-                      <textarea
-                        className={inputClass}
-                        value={c.permissionNote}
-                        onChange={(e) =>
-                          patchChar(id, {
-                            permissionNote: e.target.value,
-                            authorized: false,
-                            authorizedAt: null,
-                          })
-                        }
-                      />
-                    </label>
-                    <label className="flex gap-2">
-                      <input
-                        type="checkbox"
-                        checked={c.authorized}
-                        disabled={!c.permissionNote.trim()}
-                        onChange={(e) => patchChar(id, { authorized: e.target.checked })}
-                      />
-                      I confirm written permission to use this likeness.
-                    </label>
-                    <p className="text-xs text-muted-foreground">
-                      Permission recorded: {c.authorizedAt ?? "Not recorded"}
-                    </p>
-                    <label className="block space-y-2">
-                      <span>Reference photo (not rendered)</span>
-                      <input
-                        type="file"
-                        accept="image/png,image/jpeg,image/webp"
-                        disabled={busy}
-                        onChange={(e) => {
-                          const f = e.target.files?.[0];
-                          if (f)
-                            void run(async () =>
-                              patchChar(id, {
-                                reference: await upload(f, `${id}-reference`, false),
-                              }),
-                            );
-                        }}
-                      />
-                    </label>
-                    <div className="grid gap-4 md:grid-cols-2">
-                      {INTERACTIONS.map((pose) => {
-                        const path = c.poses[pose];
-                        return (
-                          <div key={pose} className="space-y-2 rounded-md border border-border p-4">
-                            <label className="block space-y-2">
-                              <span className="font-semibold">{pose} cutout</span>
-                              <input
-                                type="file"
-                                accept="image/png,image/webp"
-                                disabled={busy}
-                                onChange={(e) => {
-                                  const f = e.target.files?.[0];
-                                  if (f)
-                                    void run(async () => {
-                                      const newPath = await upload(f, `${id}-cutout`, true);
-                                      patchChar(id, { poses: { ...c.poses, [pose]: newPath } });
-                                    });
-                                }}
-                              />
-                            </label>
-                            {path ? (
-                              <>
-                                <p className="break-all text-xs text-muted-foreground">{path}</p>
-                                <Button
-                                  variant="outline"
-                                  size="sm"
-                                  disabled={busy}
-                                  onClick={() => void preview(path)}
-                                >
-                                  Inspect asset
-                                </Button>
-                                {previews[path] && (
-                                  <img
-                                    src={previews[path]}
-                                    alt={`${id} ${pose} approval preview`}
-                                    className="h-40 w-full object-contain"
-                                  />
-                                )}
-                                <label className="flex gap-2 text-sm">
-                                  <input
-                                    type="checkbox"
-                                    checked={!!c.approvedAssets[path]}
-                                    disabled={!c.authorized}
-                                    onChange={(e) => {
-                                      const approvedAssets = { ...c.approvedAssets };
-                                      if (e.target.checked) approvedAssets[path] = "pending";
-                                      else delete approvedAssets[path];
-                                      patchChar(id, { approvedAssets });
-                                    }}
-                                  />
-                                  Approve this exact cutout
-                                </label>
-                              </>
-                            ) : (
-                              <p className="text-sm text-warning">No cutout configured</p>
-                            )}
-                          </div>
-                        );
-                      })}
-                    </div>
-                    <div className="grid grid-cols-2 gap-3 md:grid-cols-4">
-                      {(["scale", "offsetX", "offsetY", "rotationY"] as const).map((key) => (
-                        <label key={key} className="space-y-1">
-                          <span>{key}</span>
-                          <input
-                            type="number"
-                            step="0.1"
-                            value={c[key]}
-                            className={inputClass}
-                            onChange={(e) => patchChar(id, { [key]: Number(e.target.value) })}
-                          />
-                        </label>
-                      ))}
-                    </div>
-                  </div>
-                );
-              })}
-            </section>
-            <section className="space-y-4 border-b border-border pb-8">
-              <h2 className="text-2xl font-semibold">Exact BJP artwork</h2>
-              <p className="text-sm text-muted-foreground">
-                No artwork is enabled by default, including catalogue photographs. Upload only the
-                exact authorized artwork.
-              </p>
-              <Button
-                variant="outline"
-                onClick={() =>
-                  setConfig({
-                    ...config,
-                    bjp: [
-                      ...config.bjp,
-                      {
-                        id: crypto.randomUUID(),
-                        kind: "art",
-                        label: "New artwork",
-                        asset: null,
-                        approved: false,
-                        approvedAt: null,
-                        permissionNote: "",
-                        enabled: false,
-                        anchor: "screen",
-                        scale: 25,
-                        offsetX: 0,
-                        offsetY: 0,
-                        rotation: 0,
-                        order: config.bjp.length,
-                      },
-                    ],
-                  })
-                }
-              >
-                Add artwork
-              </Button>
-              {config.bjp.map((b) => (
-                <div key={b.id} className="space-y-3 rounded-md border border-border p-4">
-                  <label className="block">
-                    Label
-                    <input
-                      className={inputClass}
-                      value={b.label}
-                      onChange={(e) => patchItem(b.id, { label: e.target.value })}
-                    />
-                  </label>
-                  <div className="grid gap-3 md:grid-cols-2">
-                    <label>
-                      Kind
-                      <select
-                        className={inputClass}
-                        value={b.kind}
-                        onChange={(e) => patchItem(b.id, { kind: e.target.value as BjpKind })}
-                      >
-                        {[
-                          "cap",
-                          "scarf",
-                          "flag",
-                          "lotus",
-                          "art",
-                          "background",
-                          "frame",
-                          "sticker",
-                        ].map((k) => (
-                          <option key={k}>{k}</option>
-                        ))}
-                      </select>
-                    </label>
-                    <label>
-                      Anchor
-                      <select
-                        className={inputClass}
-                        value={b.anchor}
-                        onChange={(e) => patchItem(b.id, { anchor: e.target.value as BjpAnchor })}
-                      >
-                        {["head", "shoulders", "screen", "background"].map((a) => (
-                          <option key={a}>{a}</option>
-                        ))}
-                      </select>
-                    </label>
-                  </div>
-                  <label className="block">
-                    Exact artwork file
-                    <input
-                      className="block"
-                      type="file"
-                      accept="image/png,image/jpeg,image/webp"
-                      disabled={busy}
-                      onChange={(e) => {
-                        const f = e.target.files?.[0];
-                        if (f)
-                          void run(async () =>
-                            patchItem(b.id, {
-                              asset: await upload(f, "bjp-art", false),
-                              approved: false,
-                              approvedAt: null,
-                              enabled: false,
-                            }),
-                          );
-                      }}
-                    />
-                  </label>
-                  {b.asset && (
-                    <>
-                      <p className="break-all text-xs text-muted-foreground">{b.asset}</p>
-                      <Button
-                        variant="outline"
-                        size="sm"
-                        onClick={() => {
-                          if (b.asset) void preview(b.asset);
-                        }}
-                      >
-                        Inspect artwork
-                      </Button>
-                      {previews[b.asset] && (
-                        <img
-                          src={previews[b.asset]}
-                          alt={b.label}
-                          className="h-40 w-full object-contain"
-                        />
-                      )}
-                    </>
-                  )}
-                  <label className="block">
-                    Written permission record
-                    <textarea
-                      className={inputClass}
-                      value={b.permissionNote}
-                      onChange={(e) =>
-                        patchItem(b.id, {
-                          permissionNote: e.target.value,
-                          approved: false,
-                          approvedAt: null,
-                          enabled: false,
-                        })
-                      }
-                    />
-                  </label>
-                  <label className="flex gap-2">
-                    <input
-                      type="checkbox"
-                      checked={b.approved}
-                      disabled={!b.asset || !b.permissionNote.trim()}
-                      onChange={(e) =>
-                        patchItem(b.id, { approved: e.target.checked, enabled: false })
-                      }
-                    />
-                    I confirm permission and approve this exact artwork.
-                  </label>
-                  <label className="flex gap-2">
-                    <input
-                      type="checkbox"
-                      checked={b.enabled}
-                      disabled={!b.approved}
-                      onChange={(e) => patchItem(b.id, { enabled: e.target.checked })}
-                    />
-                    Enable approved artwork
-                  </label>
-                  <div className="grid grid-cols-2 gap-3 md:grid-cols-5">
-                    {(["scale", "offsetX", "offsetY", "rotation", "order"] as const).map((key) => (
-                      <label key={key}>
-                        {key}
-                        <input
-                          type="number"
-                          step="0.1"
-                          className={inputClass}
-                          value={b[key]}
-                          onChange={(e) => patchItem(b.id, { [key]: Number(e.target.value) })}
-                        />
-                      </label>
-                    ))}
-                  </div>
-                  <Button
-                    variant="destructive"
-                    onClick={() =>
-                      setConfig({ ...config, bjp: config.bjp.filter((i) => i.id !== b.id) })
-                    }
-                  >
-                    Remove item
-                  </Button>
+
+  // IF NOT AUTHENTICATED: SHOW PASSWORD LOGIN GATE
+  if (!isAuthenticated) {
+    return (
+      <div className="min-h-screen flex items-center justify-center p-4 bg-gradient-to-b from-orange-50/50 via-background to-green-50/30 text-foreground">
+        <Card className="w-full max-w-md border-orange-200/80 shadow-xl bg-card">
+          <CardHeader className="text-center pb-2">
+            <div className="mx-auto mb-3 flex h-14 w-14 items-center justify-center rounded-2xl bg-orange-100 text-orange-600 shadow-inner">
+              <Lock className="h-7 w-7" />
+            </div>
+            <CardTitle className="text-xl sm:text-2xl font-bold bg-gradient-to-r from-orange-600 to-amber-600 bg-clip-text text-transparent">
+              एडमिन लॉगिन (Admin Access)
+            </CardTitle>
+            <CardDescription className="text-xs sm:text-sm mt-1">
+              यह सेक्शन केवल अधिकृत व्यवस्थापक के लिए है। कृपया पासवर्ड दर्ज करें।
+            </CardDescription>
+          </CardHeader>
+          <CardContent className="pt-3">
+            <form onSubmit={handleLogin} className="space-y-4">
+              <div className="space-y-1.5">
+                <Label htmlFor="admin-pass" className="text-xs font-semibold">
+                  एडमिन पासवर्ड (Password)
+                </Label>
+                <div className="relative">
+                  <Input
+                    id="admin-pass"
+                    type="password"
+                    placeholder="पासवर्ड दर्ज करें..."
+                    value={inputPassword}
+                    onChange={(e) => {
+                      setInputPassword(e.target.value);
+                      setPasswordError("");
+                    }}
+                    className="pr-10"
+                    autoFocus
+                  />
+                  <KeyRound className="absolute right-3 top-2.5 h-4 w-4 text-muted-foreground" />
                 </div>
-              ))}
-            </section>
-            <section className="space-y-4">
-              <h2 className="text-2xl font-semibold">Post-capture styling and video</h2>
-              <p className="text-sm text-muted-foreground">
-                AI can enhance the customer’s own photo after capture. BJP Look additionally needs
-                approved artwork. Leader scenes never get AI photos or videos. Video stays
-                unavailable until a completed booth test is recorded.
-              </p>
-              <label className="flex gap-2">
-                <input
-                  type="checkbox"
-                  checked={config.demo.enabled}
-                  disabled={busy}
-                  onChange={(e) =>
-                    setConfig({ ...config, demo: { ...config.demo, enabled: e.target.checked } })
-                  }
-                />
-                Enable fictional AI selfie test mode (separate from real-person permissions)
-              </label>
-              <p className="text-sm text-muted-foreground">
-                This development-only test uses the existing AI service after an explicit choice in
-                the hidden developer mode. It never uses leader artwork or approval records.{" "}
-                {status?.aiKey
-                  ? "AI service key is configured."
-                  : "Configure LOVABLE_API_KEY to make it available."}
-              </p>
-              <label className="flex gap-2">
-                <input
-                  type="checkbox"
-                  checked={config.ai.imageEnabled}
-                  disabled={!status?.aiKey}
-                  onChange={(e) =>
-                    setConfig({ ...config, ai: { ...config.ai, imageEnabled: e.target.checked } })
-                  }
-                />
-                Enable post-capture AI photo enhancement (BJP Look additionally needs approved
-                artwork)
-              </label>
-              <label className="flex gap-2">
-                <input
-                  type="checkbox"
-                  checked={config.ai.videoEnabled}
-                  disabled={!status?.aiKey || !status?.captures}
-                  onChange={(e) =>
-                    setConfig({ ...config, ai: { ...config.ai, videoEnabled: e.target.checked } })
-                  }
-                />
-                Enable BJP video after verification
-              </label>
-              <p>
-                Video verification:{" "}
-                {config.ai.videoVerifiedAt ?? "Not verified — unavailable to customers"}
-              </p>
-              <label className="block">
-                Run existing BJP video test from an approved booth capture
-                <input
-                  className="mt-2 block"
-                  type="file"
-                  accept="image/jpeg,image/png"
-                  disabled={busy || !config.ai.videoEnabled}
-                  onChange={(e) => {
-                    const f = e.target.files?.[0];
-                    if (!f) return;
-                    void run(async () => {
-                      const form = new FormData();
-                      form.append("image", f);
-                      form.append("scene", "bjp");
-                      form.append("interaction", "selfie");
-                      const r = await fetch("/api/video", {
-                        method: "POST",
-                        headers: { "X-Booth-Admin": password },
-                        body: form,
-                      });
-                      const job = (await r.json()) as { id?: string; code?: string };
-                      if (!r.ok || !job.id)
-                        throw new Error(
-                          `Video test unavailable: ${job.code ?? "check settings and approved artwork"}. Save settings first.`,
-                        );
-                      setVideoId(job.id);
-                      setTestVideoUrl("");
-                      setMessage(
-                        "Video test started. Check completion, inspect the result, then record verification.",
-                      );
-                    });
-                  }}
-                />
-              </label>
-              <Button
-                variant="outline"
-                disabled={busy || !videoId}
-                onClick={() =>
-                  void run(async () => {
-                    const response = await fetch(`/api/video?id=${encodeURIComponent(videoId)}`, {
-                      headers: { "X-Booth-Admin": password },
-                    });
-                    const result = (await response.json()) as {
-                      status?: string;
-                      url?: string;
-                      code?: string;
-                    };
-                    if (!response.ok)
-                      throw new Error(`Video test unavailable: ${result.code ?? "check settings"}`);
-                    if (result.status === "completed" && result.url) {
-                      setTestVideoUrl(result.url);
-                      setMessage("Video completed. Inspect it before recording verification.");
-                    } else
-                      setMessage(
-                        result.status === "failed"
-                          ? "Video test failed; it remains unavailable."
-                          : "Video still processing. Check completion again shortly.",
-                      );
-                  })
-                }
-              >
-                Check test completion
-              </Button>
-              {testVideoUrl && <video controls src={testVideoUrl} className="max-h-96 w-full" />}
-              <label className="block max-w-lg">
-                Completed existing BJP test video ID
-                <input
-                  className={inputClass}
-                  value={videoId}
-                  onChange={(e) => setVideoId(e.target.value)}
-                />
-              </label>
-              <Button
-                variant="outline"
-                disabled={busy || !videoId}
-                onClick={() =>
-                  void run(async () => {
-                    const r = await verifyFn({ data: { password, id: videoId } });
-                    if (!r.ok)
-                      throw new Error(
-                        "No valid completed MP4 found. Run and inspect the existing BJP video test first.",
-                      );
-                    setConfig({ ...config, ai: { ...config.ai, videoVerifiedAt: r.at } });
-                    setMessage("Completed video test recorded.");
-                  })
-                }
-              >
-                Record inspected test video
-              </Button>
-            </section>
-            <section className="space-y-6 border-b border-border pb-8">
-              <div className="flex flex-col gap-1 sm:flex-row sm:items-center sm:justify-between">
-                <div>
-                  <h2 className="text-2xl font-semibold">
-                    प्रत्याशी / Candidate Management (बोलता पोस्टर अभियान)
-                  </h2>
-                  <p className="text-sm text-muted-foreground">
-                    Add candidates (प्रत्याशी) to generate personalized campaign links, bulk poster QR codes, and custom Modi/Yogi/BJP posters.
-                  </p>
-                </div>
-                <span className="rounded-full bg-primary/10 px-3 py-1 text-xs font-bold text-primary">
-                  {(config.candidates ?? []).length} Candidates Registered
-                </span>
+                {passwordError && (
+                  <p className="text-xs text-destructive font-medium">{passwordError}</p>
+                )}
+                <p className="text-[11px] text-muted-foreground">
+                  डिफ़ॉल्ट पासवर्ड: <code className="bg-muted px-1.5 py-0.5 rounded text-orange-700 font-mono">admin123</code>
+                </p>
               </div>
 
-              {/* Add Candidate Form */}
-              <div className="space-y-4 rounded-xl border border-primary/40 bg-card p-5 shadow-sm">
-                <h3 className="text-lg font-semibold text-primary">
-                  + नया प्रत्याशी जोड़ें (Add New Candidate)
-                </h3>
-                <div className="grid gap-4 sm:grid-cols-2">
-                  <label className="space-y-1 text-sm">
-                    <span>प्रत्याशी का नाम (हिन्दी) *</span>
-                    <input
-                      className={inputClass}
-                      placeholder="उदा. श्री राहुल शर्मा"
-                      value={newCand.nameHi}
-                      onChange={(e) => setNewCand({ ...newCand, nameHi: e.target.value })}
+              <div className="space-y-2 pt-1">
+                <Button type="submit" className="w-full bg-orange-600 hover:bg-orange-700 text-white font-semibold">
+                  <Unlock className="h-4 w-4 mr-2" />
+                  लॉगिन करें (Unlock Panel)
+                </Button>
+
+                <Link to="/" className="block text-center">
+                  <Button variant="ghost" type="button" className="w-full text-xs text-muted-foreground">
+                    ← मुख्य होम पेज पर वापस जाएं
+                  </Button>
+                </Link>
+              </div>
+            </form>
+          </CardContent>
+        </Card>
+      </div>
+    );
+  }
+
+  // AUTHENTICATED: SHOW SYSTEMATIC 2-TAB DASHBOARD
+  return (
+    <div className="min-h-screen bg-gradient-to-b from-orange-50/50 via-background to-green-50/30 text-foreground pb-24">
+      {/* Top Header */}
+      <header className="sticky top-0 z-40 border-b bg-background/95 backdrop-blur-md shadow-xs">
+        <div className="container mx-auto px-4 h-16 flex items-center justify-between">
+          <div className="flex items-center gap-3">
+            <Link to="/">
+              <Button variant="ghost" size="icon" className="rounded-full" title="होम पेज">
+                <ArrowLeft className="h-5 w-5" />
+              </Button>
+            </Link>
+            <div>
+              <h1 className="text-lg sm:text-xl font-bold bg-gradient-to-r from-orange-600 via-amber-600 to-green-600 bg-clip-text text-transparent">
+                अभियान एडमिन पैनल (Admin Panel)
+              </h1>
+              <p className="text-xs text-muted-foreground hidden sm:block">
+                प्रत्याशी प्रबंधन एवं मुख्य अभियान सेटिंग्स
+              </p>
+            </div>
+          </div>
+
+          <div className="flex items-center gap-2">
+            <Link to="/">
+              <Button variant="outline" size="sm" className="gap-1.5 text-xs sm:text-sm">
+                <ExternalLink className="h-4 w-4" />
+                <span className="hidden sm:inline">लाइव साइट देखें</span>
+                <span className="sm:hidden">साइट</span>
+              </Button>
+            </Link>
+            <Button onClick={saveAll} size="sm" className="gap-1.5 bg-orange-600 hover:bg-orange-700 text-white font-medium text-xs sm:text-sm shadow-sm">
+              <Save className="h-4 w-4" />
+              <span>सेव करें</span>
+            </Button>
+            <Button onClick={handleLogout} variant="ghost" size="sm" className="text-xs text-muted-foreground hover:text-destructive" title="लॉगआउट">
+              लॉगआउट
+            </Button>
+          </div>
+        </div>
+      </header>
+
+      {/* Main Container */}
+      <main className="container mx-auto px-4 py-6 max-w-5xl">
+        <Tabs defaultValue="candidates" className="w-full">
+          <TabsList className="grid w-full grid-cols-2 mb-6 h-12 p-1 bg-muted/80 rounded-xl">
+            <TabsTrigger value="candidates" className="flex items-center gap-2 text-sm sm:text-base font-semibold data-[state=active]:bg-background data-[state=active]:shadow-xs rounded-lg">
+              <Users className="h-4 w-4 text-orange-600" />
+              <span>👥 प्रत्याशी प्रबंधन ({candidates.length})</span>
+            </TabsTrigger>
+            <TabsTrigger value="settings" className="flex items-center gap-2 text-sm sm:text-base font-semibold data-[state=active]:bg-background data-[state=active]:shadow-xs rounded-lg">
+              <Settings className="h-4 w-4 text-amber-600" />
+              <span>⚙️ मुख्य सेटिंग्स</span>
+            </TabsTrigger>
+          </TabsList>
+
+          {/* TAB 1: CANDIDATES MANAGEMENT */}
+          <TabsContent value="candidates" className="space-y-6">
+            {/* Add Candidate Form Card */}
+            <Card className="border-orange-200/60 shadow-xs bg-card/90">
+              <CardHeader className="pb-3 border-b border-muted">
+                <CardTitle className="text-base sm:text-lg flex items-center gap-2 text-orange-700">
+                  <Plus className="h-5 w-5" />
+                  नया प्रत्याशी (Candidate) जोड़ें
+                </CardTitle>
+                <CardDescription className="text-xs sm:text-sm">
+                  प्रत्याशी का विवरण भरें। इसके बाद उनका अलग QR कोड और सेल्फी लिंक तुरंत तैयार हो जाएगा।
+                </CardDescription>
+              </CardHeader>
+              <CardContent className="pt-4">
+                <form onSubmit={handleAddCandidate} className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                  <div className="space-y-1.5">
+                    <Label htmlFor="c-name" className="text-xs font-semibold">प्रत्याशी का पूरा नाम *</Label>
+                    <Input
+                      id="c-name"
+                      placeholder="उदा. अमन पाल या श्री राम शर्मा"
+                      value={newCandidate.name}
+                      onChange={e => setNewCandidate(prev => ({ ...prev, name: e.target.value }))}
+                      required
                     />
-                  </label>
-                  <label className="space-y-1 text-sm">
-                    <span>Candidate Name (English) *</span>
-                    <input
-                      className={inputClass}
-                      placeholder="e.g. Rahul Sharma"
-                      value={newCand.nameEn}
-                      onChange={(e) => setNewCand({ ...newCand, nameEn: e.target.value })}
+                  </div>
+
+                  <div className="space-y-1.5">
+                    <Label htmlFor="c-const" className="text-xs font-semibold">विधानसभा / लोकसभा क्षेत्र</Label>
+                    <Input
+                      id="c-const"
+                      placeholder="उदा. लखनऊ मध्य, उत्तर प्रदेश"
+                      value={newCandidate.constituency}
+                      onChange={e => setNewCandidate(prev => ({ ...prev, constituency: e.target.value }))}
                     />
-                  </label>
-                  <label className="space-y-1 text-sm">
-                    <span>विधानसभा / लोकसभा क्षेत्र (हिन्दी)</span>
-                    <input
-                      className={inputClass}
-                      placeholder="उदा. लखनऊ उत्तर"
-                      value={newCand.constituencyHi}
-                      onChange={(e) => setNewCand({ ...newCand, constituencyHi: e.target.value })}
+                  </div>
+
+                  <div className="space-y-1.5">
+                    <Label htmlFor="c-role" className="text-xs font-semibold">पद / उपाधि</Label>
+                    <Input
+                      id="c-role"
+                      placeholder="उदा. भाजपा प्रत्याशी / युवा मोर्चा"
+                      value={newCandidate.role}
+                      onChange={e => setNewCandidate(prev => ({ ...prev, role: e.target.value }))}
                     />
-                  </label>
-                  <label className="space-y-1 text-sm">
-                    <span>Constituency (English)</span>
-                    <input
-                      className={inputClass}
-                      placeholder="e.g. Lucknow North"
-                      value={newCand.constituencyEn}
-                      onChange={(e) => setNewCand({ ...newCand, constituencyEn: e.target.value })}
+                  </div>
+
+                  <div className="space-y-1.5">
+                    <Label htmlFor="c-phone" className="text-xs font-semibold">व्हाट्सएप / फोन नंबर</Label>
+                    <Input
+                      id="c-phone"
+                      placeholder="9068734941"
+                      value={newCandidate.phone}
+                      onChange={e => setNewCandidate(prev => ({ ...prev, phone: e.target.value }))}
                     />
-                  </label>
-                  <label className="space-y-1 text-sm">
-                    <span>पद / दायित्व (हिन्दी)</span>
-                    <input
-                      className={inputClass}
-                      placeholder="उदा. भाजपा प्रत्याशी"
-                      value={newCand.partyRoleHi}
-                      onChange={(e) => setNewCand({ ...newCand, partyRoleHi: e.target.value })}
+                  </div>
+
+                  <div className="sm:col-span-2 space-y-1.5">
+                    <Label htmlFor="c-slogan" className="text-xs font-semibold">चुनावी स्लोगन / नारा</Label>
+                    <Input
+                      id="c-slogan"
+                      placeholder="उदा. एक ही विकल्प - मोदी सरकार, योगी सरकार"
+                      value={newCandidate.slogan}
+                      onChange={e => setNewCandidate(prev => ({ ...prev, slogan: e.target.value }))}
                     />
-                  </label>
-                  <label className="space-y-1 text-sm">
-                    <span>Party Role / Post (English)</span>
-                    <input
-                      className={inputClass}
-                      placeholder="e.g. BJP Candidate"
-                      value={newCand.partyRoleEn}
-                      onChange={(e) => setNewCand({ ...newCand, partyRoleEn: e.target.value })}
-                    />
-                  </label>
-                  <label className="space-y-1 text-sm">
-                    <span>चुनावी नारा / स्लोगन (हिन्दी)</span>
-                    <input
-                      className={inputClass}
-                      placeholder="उदा. सबका साथ, सबका विकास 🇮🇳"
-                      value={newCand.sloganHi}
-                      onChange={(e) => setNewCand({ ...newCand, sloganHi: e.target.value })}
-                    />
-                  </label>
-                  <label className="space-y-1 text-sm">
-                    <span>Campaign Slogan (English)</span>
-                    <input
-                      className={inputClass}
-                      placeholder="e.g. Sabka Saath, Sabka Vikas"
-                      value={newCand.sloganEn}
-                      onChange={(e) => setNewCand({ ...newCand, sloganEn: e.target.value })}
-                    />
-                  </label>
-                  <label className="space-y-1 text-sm">
-                    <span>मोबाइल / WhatsApp नंबर</span>
-                    <input
-                      className={inputClass}
-                      placeholder="उदा. 9068734941"
-                      value={newCand.phone}
-                      onChange={(e) => setNewCand({ ...newCand, phone: e.target.value })}
-                    />
-                  </label>
-                  <div className="space-y-1 text-sm">
-                    <span>प्रत्याशी की फोटो (URL या फ़ाइल)</span>
-                    <div className="flex gap-2">
-                      <input
-                        className={inputClass}
-                        placeholder="https://... या फ़ाइल चुनें"
-                        value={newCand.photoUrl}
-                        onChange={(e) => setNewCand({ ...newCand, photoUrl: e.target.value })}
+                  </div>
+
+                  <div className="sm:col-span-2 space-y-2">
+                    <Label className="text-xs font-semibold">प्रत्याशी की फोटो (URL या डिवाइस से चुनें)</Label>
+                    <div className="flex flex-col sm:flex-row gap-2">
+                      <Input
+                        placeholder="फोटो लिंक (https://...) या नीचे से अपलोड करें"
+                        value={newCandidate.photoUrl}
+                        onChange={e => setNewCandidate(prev => ({ ...prev, photoUrl: e.target.value }))}
+                        className="flex-1"
                       />
-                      <label className="cursor-pointer shrink-0 rounded-md border border-input bg-muted px-3 py-2 text-xs font-semibold hover:bg-muted/80">
-                        Upload
+                      <label className="cursor-pointer">
+                        <Button type="button" variant="outline" className="w-full sm:w-auto gap-2">
+                          <ImageIcon className="h-4 w-4" />
+                          <span>फोटो अपलोड</span>
+                        </Button>
                         <input
                           type="file"
                           accept="image/*"
-                          className="sr-only"
-                          disabled={busy}
-                          onChange={(e) => {
-                            const f = e.target.files?.[0];
-                            if (f) {
-                              void run(async () => {
-                                const p = await upload(f, "candidate-photo", false);
-                                setNewCand((old) => ({ ...old, photoUrl: p }));
-                              });
-                            }
-                          }}
+                          className="hidden"
+                          onChange={handleFileUpload}
                         />
                       </label>
                     </div>
                   </div>
+
+                  <div className="sm:col-span-2 pt-2">
+                    <Button type="submit" className="w-full bg-orange-600 hover:bg-orange-700 text-white font-semibold py-2.5">
+                      <Plus className="h-4 w-4 mr-2" />
+                      प्रत्याशी जोड़ें और लिंक बनाएं
+                    </Button>
+                  </div>
+                </form>
+              </CardContent>
+            </Card>
+
+            {/* Candidate List Card */}
+            <div className="space-y-3">
+              <h2 className="text-base sm:text-lg font-bold text-foreground flex items-center justify-between">
+                <span>वर्तमान प्रत्याशी सूची ({candidates.length})</span>
+                <span className="text-xs font-normal text-muted-foreground">प्रत्येक प्रत्याशी का अलग लिंक उपलब्ध है</span>
+              </h2>
+
+              {candidates.length === 0 ? (
+                <div className="text-center py-12 border rounded-xl bg-card text-muted-foreground">
+                  <p>अभी कोई प्रत्याशी नहीं जोड़ा गया है। ऊपर दिए गए फॉर्म से जोड़ें।</p>
                 </div>
-
-                <div className="flex items-center justify-between pt-2">
-                  <label className="flex items-center gap-2 text-sm font-medium">
-                    <input
-                      type="checkbox"
-                      checked={newCand.active}
-                      onChange={(e) => setNewCand({ ...newCand, active: e.target.checked })}
-                    />
-                    सक्रिय रखें (Active)
-                  </label>
-                  <Button type="button" onClick={addCandidate} className="font-semibold">
-                    + प्रत्याशी जोड़ें (Add Candidate)
-                  </Button>
-                </div>
-              </div>
-
-              {/* List of Registered Candidates */}
-              <div className="space-y-4">
-                <h3 className="text-lg font-semibold">
-                  पंजीकृत प्रत्याशी सूची (Registered Candidates)
-                </h3>
-                {!(config.candidates && config.candidates.length > 0) ? (
-                  <p className="rounded-lg border border-dashed border-border p-6 text-center text-sm text-muted-foreground">
-                    कोई प्रत्याशी नहीं जोड़ा गया है। ऊपर दिए गए फॉर्म से नया प्रत्याशी जोड़ें।
-                  </p>
-                ) : (
-                  <div className="grid gap-4 sm:grid-cols-2">
-                    {config.candidates.map((cand) => {
-                      const shareLink = typeof window !== "undefined" ? `${window.location.origin}/?candidate=${cand.id}` : "";
-                      const qrData = candidateQr[cand.id];
-                      return (
-                        <div
-                          key={cand.id}
-                          className="flex flex-col justify-between rounded-xl border border-border bg-card p-4 shadow-sm"
-                        >
-                          <div className="space-y-3">
-                            <div className="flex items-start justify-between gap-3">
-                              <div className="flex items-center gap-3">
-                                {cand.photoUrl ? (
-                                  <img
-                                    src={cand.photoUrl}
-                                    alt={cand.name.en}
-                                    className="h-14 w-14 rounded-full border border-primary object-cover"
-                                  />
-                                ) : (
-                                  <div className="flex h-14 w-14 items-center justify-center rounded-full bg-primary/20 text-xl font-bold text-primary">
-                                    {(cand.name.hi || cand.name.en || "P")[0]}
-                                  </div>
-                                )}
-                                <div>
-                                  <h4 className="font-bold text-base">
-                                    {cand.name.hi} {cand.name.en ? `(${cand.name.en})` : ""}
-                                  </h4>
-                                  <p className="text-xs font-medium text-primary">
-                                    {cand.partyRole.hi || cand.partyRole.en} · {cand.constituency.hi || cand.constituency.en}
-                                  </p>
-                                  {cand.phone && (
-                                    <p className="text-xs text-muted-foreground">📞 {cand.phone}</p>
-                                  )}
-                                </div>
+              ) : (
+                <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                  {candidates.map((cand) => (
+                    <Card key={cand.id} className={`border transition-all shadow-xs ${cand.isActive ? "border-orange-200 bg-card" : "border-muted opacity-60 bg-muted/30"}`}>
+                      <CardContent className="p-4">
+                        <div className="flex items-start gap-3">
+                          <img
+                            src={cand.photoUrl || "/assets/yogi.png"}
+                            alt={cand.name}
+                            className="h-16 w-16 rounded-xl object-cover border border-orange-200 shadow-2xs shrink-0"
+                            onError={(e) => {
+                              (e.target as HTMLImageElement).src = "/assets/yogi.png";
+                            }}
+                          />
+                          <div className="flex-1 min-w-0">
+                            <div className="flex items-start justify-between gap-1">
+                              <div>
+                                <h3 className="font-bold text-sm sm:text-base text-foreground truncate">{cand.name}</h3>
+                                <p className="text-xs text-orange-700 font-medium">{cand.role} • {cand.constituency}</p>
                               </div>
-                              <span
-                                className={`rounded-full px-2 py-0.5 text-[10px] font-bold ${
-                                  cand.active
-                                    ? "bg-emerald-500/20 text-emerald-500"
-                                    : "bg-destructive/20 text-destructive"
-                                }`}
-                              >
-                                {cand.active ? "Active" : "Inactive"}
-                              </span>
-                            </div>
-
-                            {cand.slogan.hi && (
-                              <p className="rounded-md bg-muted/60 p-2 text-xs italic text-muted-foreground">
-                                "{cand.slogan.hi}"
-                              </p>
-                            )}
-
-                            {/* Campaign URL & Copy */}
-                            <div className="space-y-1">
-                              <span className="text-[11px] font-medium text-muted-foreground">
-                                प्रत्याशी का विशिष्ट लिंक (Unique Campaign Link):
-                              </span>
-                              <div className="flex items-center gap-1">
-                                <input
-                                  readOnly
-                                  value={shareLink}
-                                  className="w-full rounded bg-muted p-1 text-[11px] text-muted-foreground font-mono"
-                                />
-                                <Button
-                                  size="sm"
-                                  variant="outline"
-                                  className="shrink-0 text-xs py-1 h-auto"
-                                  onClick={() => copyCandidateLink(cand.id)}
-                                >
-                                  {copiedCandId === cand.id ? "✓ Copied" : "Copy"}
-                                </Button>
-                              </div>
-                            </div>
-
-                            {/* Direct Experience Links */}
-                            <div className="flex flex-wrap gap-1 text-[11px]">
-                              <span className="text-muted-foreground">Direct Links:</span>
-                              <Link
-                                to="/experience/$scene"
-                                params={{ scene: "modi" }}
-                                search={{ candidate: cand.id }}
-                                target="_blank"
-                                className="text-primary underline"
-                              >
-                                Modi
-                              </Link>
-                              <span>·</span>
-                              <Link
-                                to="/experience/$scene"
-                                params={{ scene: "yogi" }}
-                                search={{ candidate: cand.id }}
-                                target="_blank"
-                                className="text-primary underline"
-                              >
-                                Yogi
-                              </Link>
-                              <span>·</span>
-                              <Link
-                                to="/experience/$scene"
-                                params={{ scene: "bjp" }}
-                                search={{ candidate: cand.id }}
-                                target="_blank"
-                                className="text-primary underline"
-                              >
-                                BJP Look
-                              </Link>
-                            </div>
-
-                            {/* QR Code Section */}
-                            <div className="pt-2 border-t border-border/60">
-                              {qrData ? (
-                                <div className="flex items-center gap-3">
-                                  <img
-                                    src={qrData}
-                                    alt={`QR code for ${cand.name.en}`}
-                                    className="h-24 w-24 rounded border border-border bg-white p-1 shadow-sm"
-                                  />
-                                  <div className="space-y-1 text-xs">
-                                    <p className="font-semibold text-foreground">
-                                      पोस्टर प्रिंट हेतु QR कोड
-                                    </p>
-                                    <p className="text-muted-foreground text-[11px]">
-                                      इस QR कोड को प्रिंट करके बैनर व पोस्टर पर लगाएं।
-                                    </p>
-                                    <a
-                                      href={qrData}
-                                      download={`qr-poster-${cand.name.en.toLowerCase().replace(/\s+/g, "-") || cand.id}.png`}
-                                      className="inline-flex items-center gap-1 text-primary font-bold hover:underline"
-                                    >
-                                      ⬇️ Download QR (PNG)
-                                    </a>
-                                  </div>
-                                </div>
-                              ) : (
-                                <Button
-                                  size="sm"
-                                  variant="secondary"
-                                  className="w-full text-xs"
-                                  onClick={() => void generateCandidateQr(cand.id)}
-                                >
-                                  📱 QR कोड बनाएँ (Generate Poster QR)
-                                </Button>
-                              )}
-                            </div>
-                          </div>
-
-                          <div className="mt-4 flex items-center justify-between border-t border-border pt-3">
-                            <label className="flex items-center gap-2 text-xs">
-                              <input
-                                type="checkbox"
-                                checked={cand.active}
-                                onChange={() => toggleCandidateActive(cand.id)}
+                              <Switch
+                                checked={cand.isActive}
+                                onCheckedChange={() => handleToggleCandidate(cand.id)}
+                                title={cand.isActive ? "सक्रिय" : "निष्क्रिय"}
                               />
-                              सक्रिय (Active)
-                            </label>
-                            <Button
-                              variant="destructive"
-                              size="sm"
-                              className="text-xs h-7 px-2"
-                              onClick={() => removeCandidate(cand.id)}
-                            >
-                              हटाएं (Delete)
-                            </Button>
+                            </div>
+                            <p className="text-xs text-muted-foreground mt-1 line-clamp-1 italic">
+                              "{cand.slogan}"
+                            </p>
                           </div>
                         </div>
-                      );
-                    })}
+
+                        {/* Action buttons */}
+                        <div className="mt-4 pt-3 border-t border-muted/80 flex flex-wrap items-center justify-between gap-2">
+                          <div className="flex items-center gap-1.5">
+                            <Button
+                              variant="outline"
+                              size="sm"
+                              onClick={() => handleCopyLink(cand)}
+                              className="text-xs h-8 gap-1.5"
+                            >
+                              {copiedId === cand.id ? (
+                                <>
+                                  <Check className="h-3.5 w-3.5 text-green-600" />
+                                  <span className="text-green-600 font-medium">कॉपी हुआ!</span>
+                                </>
+                              ) : (
+                                <>
+                                  <Copy className="h-3.5 w-3.5" />
+                                  <span>लिंक कॉपी</span>
+                                </>
+                              )}
+                            </Button>
+
+                            <Button
+                              variant="outline"
+                              size="sm"
+                              onClick={() => setSelectedQrCandidate(cand)}
+                              className="text-xs h-8 gap-1.5"
+                            >
+                              <QrCode className="h-3.5 w-3.5 text-orange-600" />
+                              <span>QR पोस्टर</span>
+                            </Button>
+                          </div>
+
+                          <Button
+                            variant="ghost"
+                            size="sm"
+                            onClick={() => handleDeleteCandidate(cand.id)}
+                            className="text-xs h-8 text-destructive hover:text-destructive hover:bg-destructive/10 px-2"
+                            title="हटाएं"
+                          >
+                            <Trash2 className="h-4 w-4" />
+                          </Button>
+                        </div>
+                      </CardContent>
+                    </Card>
+                  ))}
+                </div>
+              )}
+            </div>
+          </TabsContent>
+
+          {/* TAB 2: GLOBAL SETTINGS */}
+          <TabsContent value="settings" className="space-y-6">
+            <Card className="border-muted shadow-xs bg-card">
+              <CardHeader className="pb-3 border-b">
+                <CardTitle className="text-base sm:text-lg flex items-center gap-2">
+                  <Settings className="h-5 w-5 text-amber-600" />
+                  मुख्य मोड एवं दृश्य सेटिंग्स (Core Toggles)
+                </CardTitle>
+                <CardDescription className="text-xs sm:text-sm">
+                  होम पेज और कैमरा पेज पर कौन-से मोड सक्रिय रहेंगे नियंत्रित करें।
+                </CardDescription>
+              </CardHeader>
+              <CardContent className="pt-4 space-y-5">
+                <div className="flex items-center justify-between py-1">
+                  <div>
+                    <p className="font-semibold text-sm">सीएम योगी जी सीन (CM Yogi Ji Scene)</p>
+                    <p className="text-xs text-muted-foreground">होम पेज पर सीएम योगी जी के साथ सेल्फी कार्ड दिखाएं</p>
                   </div>
-                )}
-              </div>
-            </section>
-            <footer className="sticky bottom-0 flex flex-wrap items-center gap-4 border-t border-border bg-background py-4">
+                  <Switch
+                    checked={settings.enableYogi}
+                    onCheckedChange={v => setSettings((s: any) => ({ ...s, enableYogi: v }))}
+                  />
+                </div>
+
+                <div className="flex items-center justify-between py-1 border-t pt-4">
+                  <div>
+                    <p className="font-semibold text-sm">पीएम मोदी जी सीन (PM Modi Ji Scene)</p>
+                    <p className="text-xs text-muted-foreground">होम पेज पर पीएम नरेंद्र मोदी जी के साथ सेल्फी कार्ड दिखाएं</p>
+                  </div>
+                  <Switch
+                    checked={settings.enableModi}
+                    onCheckedChange={v => setSettings((s: any) => ({ ...s, enableModi: v }))}
+                  />
+                </div>
+
+                <div className="flex items-center justify-between py-1 border-t pt-4">
+                  <div>
+                    <p className="font-semibold text-sm">मोबाइल फोन मोड (Phone Camera Mode)</p>
+                    <p className="text-xs text-muted-foreground">स्मार्टफोन और टैबलेट के लिए ऑटो-ओरिएंटेशन व डायरेक्ट सोशल शेयरिंग ऑन रखें</p>
+                  </div>
+                  <Switch
+                    checked={settings.enablePhoneMode}
+                    onCheckedChange={v => setSettings((s: any) => ({ ...s, enablePhoneMode: v }))}
+                  />
+                </div>
+
+                <div className="flex items-center justify-between py-1 border-t pt-4">
+                  <div>
+                    <p className="font-semibold text-sm">फोटो बूथ मोड (Photo Booth Mode)</p>
+                    <p className="text-xs text-muted-foreground">इवेंट या कियोस्क के लिए हैंड्स-फ्री टाइमर व फुल-स्क्रीन मोड ऑन रखें</p>
+                  </div>
+                  <Switch
+                    checked={settings.enableBoothMode}
+                    onCheckedChange={v => setSettings((s: any) => ({ ...s, enableBoothMode: v }))}
+                  />
+                </div>
+
+                <div className="flex items-center justify-between py-1 border-t pt-4">
+                  <div>
+                    <p className="font-semibold text-sm">भाजपा एवं भगवा थीम (BJP Saffron Theme)</p>
+                    <p className="text-xs text-muted-foreground">कमल का निशान, तिरंगा बॉर्डर और भगवा हाईलाइट्स एक्टिव रखें</p>
+                  </div>
+                  <Switch
+                    checked={settings.bjpTheme}
+                    onCheckedChange={v => setSettings((s: any) => ({ ...s, bjpTheme: v }))}
+                  />
+                </div>
+
+                <div className="flex items-center justify-between py-1 border-t pt-4">
+                  <div>
+                    <p className="font-semibold text-sm">AI स्टाइलिंग एवं ब्यूटी फिल्टर (AI Styling)</p>
+                    <p className="text-xs text-muted-foreground">चेहरे की रोशनी और बैकग्राउंड को वास्तविक नेता के साथ संतुलित करें</p>
+                  </div>
+                  <Switch
+                    checked={settings.aiEnhancement}
+                    onCheckedChange={v => setSettings((s: any) => ({ ...s, aiEnhancement: v }))}
+                  />
+                </div>
+              </CardContent>
+            </Card>
+
+            {/* Campaign & Contact Details Card */}
+            <Card className="border-muted shadow-xs bg-card">
+              <CardHeader className="pb-3 border-b">
+                <CardTitle className="text-base sm:text-lg">संपर्क एवं अभियान विवरण (Contact Info)</CardTitle>
+                <CardDescription className="text-xs sm:text-sm">
+                  यह जानकारी फुटर और व्हाट्सएप सपोर्ट बटन में प्रदर्शित होती है।
+                </CardDescription>
+              </CardHeader>
+              <CardContent className="pt-4 grid grid-cols-1 sm:grid-cols-2 gap-4">
+                <div className="space-y-1.5">
+                  <Label className="text-xs font-semibold">फोन / व्हाट्सएप नंबर</Label>
+                  <Input
+                    value={settings.contactPhone}
+                    onChange={e => setSettings((s: any) => ({ ...s, contactPhone: e.target.value }))}
+                  />
+                </div>
+                <div className="space-y-1.5">
+                  <Label className="text-xs font-semibold">ईमेल आईडी</Label>
+                  <Input
+                    value={settings.contactEmail}
+                    onChange={e => setSettings((s: any) => ({ ...s, contactEmail: e.target.value }))}
+                  />
+                </div>
+                <div className="sm:col-span-2 space-y-1.5">
+                  <Label className="text-xs font-semibold">स्थान / पता</Label>
+                  <Input
+                    value={settings.contactLocation}
+                    onChange={e => setSettings((s: any) => ({ ...s, contactLocation: e.target.value }))}
+                  />
+                </div>
+              </CardContent>
+            </Card>
+          </TabsContent>
+        </Tabs>
+      </main>
+
+      {/* QR Code Poster Modal */}
+      {selectedQrCandidate && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/60 backdrop-blur-xs">
+          <div className="bg-background rounded-2xl max-w-sm w-full p-6 text-center space-y-4 border border-orange-200 shadow-xl">
+            <h3 className="font-bold text-lg text-orange-700">
+              {selectedQrCandidate.name}
+            </h3>
+            <p className="text-xs text-muted-foreground">
+              यह QR कोड स्कैन करने पर सीधा प्रत्याशी के साथ मोदी-योगी जी का सेल्फी कैमरा खुलेगा।
+            </p>
+
+            <div className="p-4 bg-white rounded-xl border inline-block shadow-inner">
+              <img
+                src={`https://api.qrserver.com/v1/create-qr-code/?size=200x200&data=${encodeURIComponent(
+                  `${window.location.origin}/?candidate=${encodeURIComponent(selectedQrCandidate.name)}&constituency=${encodeURIComponent(selectedQrCandidate.constituency)}&slogan=${encodeURIComponent(selectedQrCandidate.slogan)}`
+                )}`}
+                alt="Candidate QR"
+                className="w-48 h-48 mx-auto"
+              />
+            </div>
+
+            <div className="flex gap-2">
               <Button
-                disabled={busy}
-                onClick={() =>
-                  void run(async () => {
-                    const result = await save({
-                      data: { password, config: config as unknown as Record<string, unknown> },
-                    });
-                    setConfig(result.config);
-                    setMessage("Settings and approval records saved.");
-                  })
-                }
+                variant="outline"
+                className="flex-1"
+                onClick={() => setSelectedQrCandidate(null)}
               >
-                {busy ? "Working…" : "Save settings and approvals"}
+                बंद करें
               </Button>
-              <p className="text-sm text-muted-foreground">
-                Uploads alone do not enable assets. Save explicit approvals.
-              </p>
-            </footer>
-          </>
-        )}
+              <a
+                href={`https://api.qrserver.com/v1/create-qr-code/?size=500x500&data=${encodeURIComponent(
+                  `${window.location.origin}/?candidate=${encodeURIComponent(selectedQrCandidate.name)}&constituency=${encodeURIComponent(selectedQrCandidate.constituency)}&slogan=${encodeURIComponent(selectedQrCandidate.slogan)}`
+                )}`}
+                download={`${selectedQrCandidate.name}_QR.png`}
+                target="_blank"
+                rel="noreferrer"
+                className="flex-1"
+              >
+                <Button className="w-full bg-orange-600 hover:bg-orange-700 text-white gap-1.5">
+                  <Download className="h-4 w-4" />
+                  डाउनलोड
+                </Button>
+              </a>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Sticky Bottom Save Bar */}
+      <div className="fixed bottom-0 left-0 right-0 p-3 bg-background/95 backdrop-blur-md border-t z-30 shadow-lg">
+        <div className="container mx-auto max-w-5xl flex items-center justify-between gap-3">
+          <span className="text-xs text-muted-foreground hidden sm:inline">
+            सभी प्रत्याशी और अभियान सेटिंग्स को तुरंत लागू करने के लिए सेव करें
+          </span>
+          <Button onClick={saveAll} className="w-full sm:w-auto bg-orange-600 hover:bg-orange-700 text-white font-semibold gap-2 shadow-sm">
+            <Save className="h-4 w-4" />
+            <span>💾 बदलाव सेव करें (Save Changes)</span>
+          </Button>
+        </div>
       </div>
-    </main>
+    </div>
   );
 }

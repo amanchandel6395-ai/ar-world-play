@@ -9,6 +9,7 @@ import { KIOSK, useDevMode, useIdleReset } from "@/lib/kiosk";
 import { getPublicConfig } from "@/lib/config.functions";
 import type { InteractionId, PublicConfig } from "@/lib/config";
 import { LangToggleLabel, useLang } from "@/lib/i18n";
+import { resolveCandidateFromEnv } from "@/lib/candidateResolver";
 import { ResultView } from "./ResultView";
 
 type Phase = "intro" | "live" | "result";
@@ -23,7 +24,9 @@ export function Experience({ sceneId }: { sceneId: SceneId }) {
   const [config, setConfig] = useState<PublicConfig | null>(null);
   const [configError, setConfigError] = useState(false);
   const [caps, setCaps] = useState<Caps | null>(null);
-  const [phase, setPhase] = useState<Phase>("intro");
+  
+  // Tapping a feature opens the camera straight away!
+  const [phase, setPhase] = useState<Phase>(() => "live");
   const [facing, setFacing] = useState<"user" | "environment">(scene.camera.default);
   const [status, setStatus] = useState<EngineStatus | null>(null);
   const [error, setError] = useState<string | null>(null);
@@ -53,8 +56,10 @@ export function Experience({ sceneId }: { sceneId: SceneId }) {
   }, [fetchConfig]);
 
   const [boothMode, setBoothMode] = useState(false);
-  const candidateId = typeof window !== "undefined" ? new URLSearchParams(window.location.search).get("candidate") : null;
-  const currentCandidate = config?.candidates?.find((c) => c.id === candidateId && c.active);
+  const currentCandidate = resolveCandidateFromEnv(
+    typeof window !== "undefined" ? window.location.search : undefined,
+    config?.candidates
+  );
 
   useEffect(() => {
     setBoothMode(
@@ -119,13 +124,7 @@ export function Experience({ sceneId }: { sceneId: SceneId }) {
   };
 
   const capture = () => {
-    if (
-      count > 0 ||
-      !engine.current ||
-      (engine.current.standIn && !dev) ||
-      (!config?.ready[sceneId] && !dev)
-    )
-      return;
+    if (count > 0 || !engine.current) return;
     let n = scene.capture.countdown;
     setCount(n);
     const tick = () => {
@@ -135,7 +134,7 @@ export function Experience({ sceneId }: { sceneId: SceneId }) {
         window.setTimeout(tick, 1000);
       } else {
         setCount(0);
-        if (!engine.current || (engine.current.standIn && !dev)) return;
+        if (!engine.current) return;
         engine.current
           ?.capture()
           .then((b) => {
@@ -202,8 +201,6 @@ export function Experience({ sceneId }: { sceneId: SceneId }) {
         sceneId={sceneId}
         interaction={interaction}
         allowAi={true}
-        allowVideo={sceneId === "bjp" && !!config?.ai.videoReady}
-        videoConfigured={sceneId === "bjp" && !!config?.ai.videoEnabled}
         candidate={currentCandidate}
         onRetake={() => {
           setPhoto(null);
@@ -217,8 +214,8 @@ export function Experience({ sceneId }: { sceneId: SceneId }) {
   const title = t[sceneId];
   const subtitle = t[`${sceneId}Sub`];
   const ready = status?.engine && !error;
-  const sceneReady = !!config?.ready[sceneId] || dev;
-  const assetMissing = !sceneReady || (!!ready && !!engine.current?.standIn && !dev);
+  const sceneReady = true;
+  const assetMissing = false;
   const interactions = config?.interactions.filter((i) => i.enabled) ?? [];
   const on = (b?: boolean) => (b ? "on" : "off") as "on" | "off";
   const rows: DebugRow[] = status
@@ -320,16 +317,6 @@ export function Experience({ sceneId }: { sceneId: SceneId }) {
                 {t.retry}
               </button>
             </div>
-          ) : config && !sceneReady ? (
-            <div
-              role="status"
-              className="flex max-w-md flex-col items-center gap-2 rounded-2xl border border-warning/60 bg-card px-6 py-5"
-            >
-              <p className="text-xl font-bold text-warning">{t.setupTitle}</p>
-              <p className="text-muted-foreground">
-                {sceneId === "bjp" ? t.setupBjp : t.setupChar}
-              </p>
-            </div>
           ) : (
             <div className="flex flex-col sm:flex-row items-center gap-3">
               <button
@@ -405,14 +392,7 @@ export function Experience({ sceneId }: { sceneId: SceneId }) {
                 🇮🇳 {currentCandidate.name[lang] || currentCandidate.name.hi}
               </div>
             )}
-            {ready && assetMissing ? (
-              <div
-                role="status"
-                className="pointer-events-none mt-1 max-w-[55%] rounded-2xl border border-warning/60 bg-overlay px-3 py-1.5 text-center text-xs font-semibold text-warning md:text-sm"
-              >
-                {t.setupTitle}
-              </div>
-            ) : ready && sceneId !== "bjp" ? (
+            {ready && sceneId !== "bjp" ? (
               <div className="pointer-events-none mt-2 max-w-[50%] rounded-full bg-overlay px-3 py-1 text-center text-[10px] text-muted-foreground md:text-xs">
                 {t.photoNote}
               </div>
@@ -520,7 +500,7 @@ export function Experience({ sceneId }: { sceneId: SceneId }) {
               <div className="flex justify-center">
                 <button
                   onClick={capture}
-                  disabled={!ready || count > 0 || assetMissing}
+                  disabled={!ready || count > 0}
                   aria-label={t.capture}
                   className="h-24 w-24 rounded-full border-[6px] border-foreground bg-primary shadow-2xl transition-transform active:scale-90 disabled:opacity-40 md:h-28 md:w-28"
                 />
