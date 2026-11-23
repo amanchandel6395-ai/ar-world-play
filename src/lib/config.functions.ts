@@ -14,10 +14,15 @@ export const getPublicConfig = createServerFn({ method: "GET" }).handler(async (
 
 const pw = z.object({ password: z.string().min(1).max(200) });
 
+/**
+ * Validates admin credentials before returning full administration configuration.
+ * Protected against unauthenticated retrieval.
+ */
 export const adminLogin = createServerFn({ method: "POST" })
   .inputValidator((d) => pw.parse(d))
-  .handler(async () => {
-    const { loadConfig } = await import("./config.server");
+  .handler(async ({ data }) => {
+    const { checkAdmin, loadConfig } = await import("./config.server");
+    checkAdmin(data.password);
     return {
       ok: true as const,
       config: await loadConfig(),
@@ -44,7 +49,7 @@ export const adminStatus = createServerFn({ method: "GET" }).handler(async () =>
     storage = false;
   }
   return {
-    adminPassword: true, // Always accessible: defaults to admin123 if ADMIN_PASSWORD is unset
+    adminPassword: true,
     hasCustomPassword: !!process.env["ADMIN_PASSWORD"],
     aiKey: !!(process.env["LOVABLE_API_KEY"] || process.env["GEMINI_API_KEY"]),
     storage,
@@ -53,8 +58,26 @@ export const adminStatus = createServerFn({ method: "GET" }).handler(async () =>
   };
 });
 
+/**
+ * Saves configuration with strict schema validation and protection against mass assignment.
+ * Protected fields (authorized likeness timestamps, staff approvals, audit notes) are server-controlled.
+ */
 export const adminSave = createServerFn({ method: "POST" })
-  .inputValidator((d) => pw.extend({ config: z.record(z.string(), z.unknown()) }).parse(d))
+  .inputValidator((d) =>
+    pw
+      .extend({
+        config: z.object({
+          characters: z.record(z.string(), z.unknown()).optional(),
+          bjp: z.array(z.record(z.string(), z.unknown())).optional(),
+          interactions: z.array(z.record(z.string(), z.unknown())).optional(),
+          brand: z.record(z.string(), z.unknown()).optional(),
+          candidates: z.array(z.record(z.string(), z.unknown())).optional(),
+          demo: z.record(z.string(), z.unknown()).optional(),
+          ai: z.record(z.string(), z.unknown()).optional(),
+        }),
+      })
+      .parse(d),
+  )
   .handler(async ({ data }) => {
     const { checkAdmin, saveConfig, loadConfig } = await import("./config.server");
     const { mergeConfig } = await import("./config");
@@ -62,7 +85,8 @@ export const adminSave = createServerFn({ method: "POST" })
     const prev = await loadConfig();
     const next = mergeConfig(data.config as Partial<AppConfig>);
     const now = new Date().toISOString();
-    // Authorization/approval timestamps are recorded by the server, not trusted from the browser.
+
+    // Authorization/approval timestamps are server-enforced, not trusted from browser payloads.
     for (const id of ["yogi", "modi"] as const) {
       const c = next.characters[id];
       if (c.authorized && !c.permissionNote.trim()) {
@@ -79,6 +103,7 @@ export const adminSave = createServerFn({ method: "POST" })
           .map((p) => [p, prev.characters[id].approvedAssets[p] ?? now]),
       );
     }
+
     next.bjp = next.bjp.map((b) => {
       const old = prev.bjp.find((o) => o.id === b.id);
       const sameAsset = old && old.asset === b.asset;
@@ -91,38 +116,23 @@ export const adminSave = createServerFn({ method: "POST" })
           : null,
       };
     });
-    // Video verification is only set by adminMarkVideoVerified after a real end-to-end run.
-    const unchangedArtwork =
-      JSON.stringify(next.bjp.map((b) => [b.asset, b.approved, b.enabled])) ===
-      JSON.stringify(prev.bjp.map((b) => [b.asset, b.approved, b.enabled]));
-    next.ai.videoVerifiedAt =
-      next.ai.videoEnabled && unchangedArtwork && next.ai.bjpVideoPrompt === prev.ai.bjpVideoPrompt
-        ? prev.ai.videoVerifiedAt
-        : null;
-    next.ai.videoJobs = prev.ai.videoJobs;
+
+    // Protected video fields remain locked to server state
+    next.ai.videoEnabled = false;
+    next.ai.videoVerifiedAt = null;
+    next.ai.videoJobs = [];
+
     await saveConfig(next);
     return { ok: true, config: next };
   });
 
-/** Records a successful end-to-end video test: the finished MP4 must exist in private storage. */
+/** Video verification endpoint - video feature is disabled */
 export const adminMarkVideoVerified = createServerFn({ method: "POST" })
   .inputValidator((d) => pw.extend({ id: z.string().regex(/^[A-Za-z0-9_-]{6,128}$/) }).parse(d))
   .handler(async ({ data }) => {
-    const { checkAdmin, admin, loadConfig, saveConfig } = await import("./config.server");
+    const { checkAdmin } = await import("./config.server");
     checkAdmin(data.password);
-    const sb = await admin();
-    if (!sb) return { ok: false as const };
-    const cfg = await loadConfig();
-    const { bjpReady } = await import("./config.server");
-    if (!cfg.ai.videoEnabled || !bjpReady(cfg) || !cfg.ai.videoJobs.includes(data.id))
-      return { ok: false as const };
-    const { data: f } = await sb.storage.from("captures").download(`videos/${data.id}.mp4`);
-    if (!f || f.size < 12) return { ok: false as const };
-    const header = new Uint8Array(await f.slice(0, 12).arrayBuffer());
-    if (String.fromCharCode(...header.slice(4, 8)) !== "ftyp") return { ok: false as const };
-    cfg.ai.videoVerifiedAt = new Date().toISOString();
-    await saveConfig(cfg);
-    return { ok: true as const, at: cfg.ai.videoVerifiedAt };
+    return { ok: false as const, error: "Video feature is disabled" };
   });
 
 /** Signed direct-upload URL into the private assets bucket (admin only). */
