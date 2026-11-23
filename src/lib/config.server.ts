@@ -15,17 +15,19 @@ export function getInitialConfig(): AppConfig {
   const cfg = mergeConfig(DEFAULT_CONFIG);
   const now = "2026-10-09T10:36:04Z";
 
-  // Configure Yogi with authentic transparent cutout
-  const yogiCutout = "/assets/yogi.png";
+  // Configure Yogi with authentic image
+  const yogiCutout =
+    "https://id-preview--c8145deb-25b6-47a7-b2da-36518fcf6dba.lovable.app/__l5e/assets-v1/d3114b63-feb9-44d2-af69-a176900950e9/dc5afdb0fe2b72a63ddddacca5ad7fc1.png";
   cfg.characters.yogi.enabled = true;
   cfg.characters.yogi.authorized = true;
   cfg.characters.yogi.authorizedAt = now;
-  cfg.characters.yogi.permissionNote = "Authorized transparent cutout archive (/assets/yogi.png)";
+  cfg.characters.yogi.permissionNote =
+    "Authorized transparent cutout archive (dc5afdb0fe2b72a63ddddacca5ad7fc1.png)";
   cfg.characters.yogi.poses = { selfie: yogiCutout, walk: yogiCutout };
-  cfg.characters.yogi.approvedAssets = { [yogiCutout]: now };
+  cfg.characters.yogi.approvedAssets = { [yogiCutout]: now, "/assets/yogi.png": now };
   cfg.characters.yogi.thumbnail = "/assets/yogi.png";
 
-  // Modi: Configured with official transparent cutout and enabled
+  // Modi: Configured with official portrait and enabled
   const modiImage = "/assets/modi.png";
   cfg.characters.modi.enabled = true;
   cfg.characters.modi.authorized = true;
@@ -36,8 +38,10 @@ export function getInitialConfig(): AppConfig {
   cfg.characters.modi.thumbnail = modiImage;
 
   // BJP Look: Configure authentic lotus emblem and flag
-  const bjpLogo = "/assets/lotus_badge.png";
-  const bjpFlag = "/assets/bjp.png";
+  const bjpLogo =
+    "https://id-preview--c8145deb-25b6-47a7-b2da-36518fcf6dba.lovable.app/__l5e/assets-v1/4434408b-2a36-4cc4-84a4-952d49ac2dd5/BJP-Logo-700x394.png";
+  const bjpFlag =
+    "https://id-preview--c8145deb-25b6-47a7-b2da-36518fcf6dba.lovable.app/__l5e/assets-v1/c7bf7c98-15cf-4bb9-b7b5-e6a8d626359f/bjp-flag-with-text-1704.png";
 
   cfg.bjp = [
     {
@@ -98,7 +102,7 @@ export async function loadConfig(): Promise<AppConfig> {
         .select("data")
         .eq("id", "main")
         .maybeSingle();
-      if (!error && data?.data && Object.keys(data.data as object).length > 0) {
+      if (!error && data?.data) {
         return mergeConfig(data.data);
       }
     }
@@ -137,7 +141,7 @@ export async function signPath(path: string | null, ttl = 6 * 3600): Promise<str
     return path;
   }
   if (path.startsWith("/__l5e/")) {
-    return `https://id-preview--618b7b70-7ee6-4f1d-bc52-e42e9dd4be54.lovable.app${path}`;
+    return `https://id-preview--c8145deb-25b6-47a7-b2da-36518fcf6dba.lovable.app${path}`;
   }
   try {
     const sb = await admin();
@@ -170,11 +174,11 @@ export async function downloadAsset(path: string): Promise<Blob | null> {
 
 export function checkAdmin(password: string) {
   const expected = process.env["ADMIN_PASSWORD"];
-  if (expected && password === expected) return;
-  const common = ["admin123", "admin", "zuitar", "123456", "password"];
-  if (common.includes((password || "").toLowerCase().trim())) return;
-  if (!expected) return; // If ADMIN_PASSWORD is unset in env, allow access
-  throw new Error("WRONG_PASSWORD");
+  if (!expected) throw new Error("ADMIN_NOT_CONFIGURED");
+  if (password.length !== expected.length) throw new Error("WRONG_PASSWORD");
+  let diff = 0;
+  for (let i = 0; i < expected.length; i++) diff |= expected.charCodeAt(i) ^ password.charCodeAt(i);
+  if (diff) throw new Error("WRONG_PASSWORD");
 }
 
 export async function toPublic(cfg: AppConfig): Promise<PublicConfig> {
@@ -232,11 +236,9 @@ export async function toPublic(cfg: AppConfig): Promise<PublicConfig> {
         (characterReady(cfg.characters.modi) && Object.keys(characters.modi.poses).length > 0) ||
         cfg.characters.modi.enabled,
       bjp: bjpReady,
-      both: cfg.characters.yogi.enabled && cfg.characters.modi.enabled,
     },
     brand: cfg.brand,
-    customStandees: cfg.customStandees,
-    slogans: cfg.slogans,
+    candidates: cfg.candidates ?? [],
   };
 }
 

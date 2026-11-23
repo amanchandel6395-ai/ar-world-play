@@ -4,7 +4,7 @@ import { useServerFn } from "@tanstack/react-start";
 import { getPublicConfig } from "@/lib/config.functions";
 import { createShare } from "@/lib/share.functions";
 import QRCode from "qrcode";
-import type { PublicConfig } from "@/lib/config";
+import type { PublicConfig, Candidate } from "@/lib/config";
 import type { SceneId } from "@/ar/scenes";
 import { useDevMode } from "@/lib/kiosk";
 import { LangToggleLabel, useLang } from "@/lib/i18n";
@@ -43,10 +43,10 @@ const cards: {
     kicker: "selfieWith",
     tone: "from-amber-600/30 via-orange-500/15 to-card",
     image: "/assets/yogi.png",
-    title: { en: "Selfie with CM Yogi Ji", hi: "सेल्फ़ी सीएम योगी जी के साथ" },
-    badge: { en: "CM Yogi Ji", hi: "सीएम योगी जी" },
+    title: { en: "Selfie with CM Yogi", hi: "सेल्फ़ी सीएम योगी के साथ" },
+    badge: { en: "CM Yogi Adityanath", hi: "मुख्यमंत्री योगी आदित्यनाथ" },
     desc: {
-      en: "Live selfie, handshake, meeting, scarf & gift with CM Yogi Ji",
+      en: "Live selfie, handshake, meeting, scarf & gift with CM Yogi",
       hi: "लाइव सेल्फ़ी, हाथ मिलाना, मुलाक़ात, अंगवस्त्र व उपहार भेंट",
     },
   },
@@ -86,6 +86,7 @@ function Home() {
     setBoothMode(booth);
   };
   const fetchConfig = useServerFn(getPublicConfig);
+  const [candidates, setCandidates] = useState<Candidate[]>([]);
   const [ready, setReady] = useState<PublicConfig["ready"] | null>(null);
   const [demoAiReady, setDemoAiReady] = useState(false);
   const [boothOpen, setBoothOpen] = useState(false);
@@ -95,8 +96,6 @@ function Home() {
   const [showAi, setShowAi] = useState(false);
   const [aiBusy, setAiBusy] = useState(false);
   const [aiError, setAiError] = useState<string | null>(null);
-  const [canRetryAi, setCanRetryAi] = useState(false);
-  const [roomAlternative, setRoomAlternative] = useState(false);
   const [modalQr, setModalQr] = useState<string | null>(null);
   const [modalQrBusy, setModalQrBusy] = useState(false);
   const shareFn = useServerFn(createShare);
@@ -115,6 +114,9 @@ function Home() {
   const isHindi = lang === "hi";
   const displayedPhoto = showAi && aiPhoto ? aiPhoto : photo;
 
+  const candidateId = typeof window !== "undefined" ? new URLSearchParams(window.location.search).get("candidate") : null;
+  const currentCandidate = candidates.find((c) => c.id === candidateId && c.active);
+
   useEffect(() => {
     setBoothMode(
       new URLSearchParams(window.location.search).get("mode") === "booth" ||
@@ -124,6 +126,7 @@ function Home() {
       .then((c) => {
         setReady(c.ready);
         setDemoAiReady(c.demo.aiReady);
+        if (c.candidates) setCandidates(c.candidates);
       })
       .catch(() => {
         setReady(null);
@@ -235,10 +238,7 @@ function Home() {
     if (!photo || aiBusy) return;
     setAiBusy(true);
     setAiError(null);
-    setCanRetryAi(false);
-    setRoomAlternative(false);
     setLastAttempt({ scene, interaction });
-    let retryableOnFailure = true;
     try {
       const image = await (await fetch(photo)).blob();
       const form = new FormData();
@@ -246,22 +246,10 @@ function Home() {
       form.append("scene", scene);
       form.append("interaction", interaction);
       const response = await fetch("/api/enhance", { method: "POST", body: form });
-      const result = (await response.json().catch(() => ({}))) as {
-        b64?: string;
-        code?: string;
-        message?: string;
-        retryable?: boolean;
-      };
-      retryableOnFailure = result.retryable === true;
-      setCanRetryAi(retryableOnFailure);
+      const result = (await response.json().catch(() => ({}))) as { b64?: string; code?: string };
       if (!response.ok || !result.b64) {
-        const rejected = result.code === "request_rejected";
-        setRoomAlternative(rejected);
-        const message = rejected
-          ? isHindi
-            ? "चुनी गई फोटो सेवा ने इस विकल्प को अपने नियमों के तहत रोक दिया। इसे दूसरी सेवा पर नहीं भेजा गया; आपकी मूल फ़ोटो उपलब्ध है।"
-            : "The selected photo service declined this option under its rules. It was not sent to another service; your original photo is still available."
-          : result.code === "not_configured"
+        const message =
+          result.code === "not_configured"
             ? isHindi
               ? "AI अभी booth settings में चालू नहीं है।"
               : "AI is not enabled in booth settings yet."
@@ -272,7 +260,7 @@ function Home() {
               : isHindi
                 ? "AI edit अभी पूरा नहीं हो सका।"
                 : "The AI edit could not be completed.";
-        throw new Error(result.message || message);
+        throw new Error(message);
       }
       setAiPhoto(`data:image/jpeg;base64,${result.b64}`);
       setShowAi(true);
@@ -283,7 +271,6 @@ function Home() {
         }, 100);
       }
     } catch (error) {
-      setCanRetryAi(retryableOnFailure);
       setAiError(
         error instanceof Error ? error.message : isHindi ? "AI edit विफल हुआ।" : "AI edit failed.",
       );
@@ -337,13 +324,6 @@ function Home() {
           >
             {LangToggleLabel(lang)}
           </button>
-          <Link
-            to="/admin"
-            className="zt-btn-ghost border border-amber-500/40 bg-amber-500/10 text-amber-300 hover:bg-amber-500/20 text-xs px-3 py-1.5 flex items-center gap-1 font-semibold rounded-full transition-all"
-            title="3D Cutout Studio & Admin"
-          >
-            ⚙️ {lang === "hi" ? "3D स्टूडियो" : "3D Studio"}
-          </Link>
           <div className="flex rounded-full border border-border bg-overlay/50 p-0.5 text-xs" aria-label={t.deviceMode}>
             <button
               type="button"
@@ -368,6 +348,57 @@ function Home() {
           </div>
         </div>
       </header>
+
+      {currentCandidate && (
+        <div className="mx-auto mt-6 w-full max-w-7xl overflow-hidden rounded-3xl border-2 border-primary/50 bg-gradient-to-r from-orange-500/15 via-background to-emerald-500/15 p-5 shadow-2xl md:p-7">
+          <div className="flex flex-col sm:flex-row items-center gap-5 text-center sm:text-left">
+            {currentCandidate.photoUrl ? (
+              <img
+                src={currentCandidate.photoUrl}
+                alt={currentCandidate.name[lang] || currentCandidate.name.en}
+                className="h-28 w-28 rounded-2xl border-2 border-primary object-cover shadow-lg shrink-0"
+              />
+            ) : (
+              <div className="flex h-28 w-28 shrink-0 items-center justify-center rounded-2xl border-2 border-primary bg-primary/20 text-3xl font-bold text-primary shadow-lg">
+                {(currentCandidate.name[lang] || currentCandidate.name.en || "P")[0]}
+              </div>
+            )}
+            <div className="flex-1 space-y-1.5">
+              <div className="inline-flex items-center gap-2 rounded-full bg-primary/20 px-3 py-1 text-xs font-extrabold text-primary">
+                <span>🇮🇳</span>
+                <span>{isHindi ? "बोलता पोस्टर अभियान · विशेष समर्थन" : "Bolta Poster Campaign · Endorsement"}</span>
+              </div>
+              <h2 className="text-2xl font-black md:text-4xl text-gradient">
+                {currentCandidate.name[lang] || currentCandidate.name.en}
+              </h2>
+              <p className="text-sm font-bold text-foreground/90 md:text-base">
+                {currentCandidate.partyRole[lang] || currentCandidate.partyRole.en} ·{" "}
+                <span className="text-primary font-semibold">{currentCandidate.constituency[lang] || currentCandidate.constituency.en}</span>
+              </p>
+              {currentCandidate.slogan && (
+                <p className="text-xs font-medium italic text-muted-foreground md:text-sm">
+                  "{currentCandidate.slogan[lang] || currentCandidate.slogan.en}"
+                </p>
+              )}
+            </div>
+            <div className="flex flex-col gap-2 shrink-0">
+              <span className="rounded-xl bg-primary px-4 py-2 text-xs font-bold text-primary-foreground shadow-md text-center">
+                {isHindi ? "✓ प्रत्याशी समर्थन मोड सक्रिय" : "✓ Candidate Mode Active"}
+              </span>
+              <button
+                type="button"
+                onClick={() => {
+                  window.history.replaceState({}, "", window.location.pathname);
+                  window.location.reload();
+                }}
+                className="text-[11px] text-muted-foreground underline hover:text-foreground text-center"
+              >
+                {isHindi ? "सामान्य मोड में बदलें" : "Clear candidate selection"}
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
 
       <div className="mx-auto mt-8 grid w-full max-w-7xl flex-1 gap-6 md:mt-12 sm:grid-cols-2 xl:grid-cols-3">
         {cards.map((c, i) => (
@@ -397,7 +428,7 @@ function Home() {
                 <img
                   src={c.image}
                   alt={c.badge[lang]}
-                  className="h-full w-full object-cover object-top transition-transform duration-300 group-hover:scale-105"
+                  className="h-full w-full object-contain p-2 transition-transform duration-300 group-hover:scale-105"
                   loading="eager"
                 />
               </div>
@@ -405,86 +436,61 @@ function Home() {
               <p className="mt-1.5 text-xs text-muted-foreground md:text-sm">{c.desc[lang]}</p>
             </div>
 
-            {/* Action Buttons: Booth Mode vs Phone Mode */}
+            {/* Action Buttons: Live Selfie, Upload Photo, Video */}
             <div className="mt-2 flex flex-col gap-2 pt-3 border-t border-border/60">
               <div className={`grid ${boothMode ? "grid-cols-2" : "grid-cols-3"} gap-2`}>
-                {boothMode ? (
-                  <>
-                    <Link
-                      to="/experience/$scene"
-                      params={{ scene: c.id }}
-                      search={{ mode: "booth" }}
-                      onClick={() => localStorage.setItem("zuitar.deviceMode", "booth")}
-                      className="zt-btn-primary flex items-center justify-center gap-1.5 py-3 text-xs sm:text-sm font-bold text-center shadow-lg"
-                    >
-                      <span>🤳</span>
-                      <span>{isHindi ? "लाइव सेल्फ़ी लें" : "Take Live Selfie"}</span>
-                    </Link>
-                    <button
-                      type="button"
-                      onClick={() => {
-                        setSelectedModalScene(c.id as "modi" | "yogi" | "bjp");
-                        setBoothOpen(true);
+                <Link
+                  to="/experience/$scene"
+                  params={{ scene: c.id }}
+                  search={{
+                    ...(boothMode ? { mode: "booth" as const } : {}),
+                    ...(candidateId ? { candidate: candidateId } : {}),
+                  }}
+                  onClick={() =>
+                    localStorage.setItem("zuitar.deviceMode", boothMode ? "booth" : "personal")
+                  }
+                  className="zt-btn-primary flex items-center justify-center gap-1 py-2.5 text-xs sm:text-sm font-semibold text-center"
+                >
+                  <span>🤳</span>
+                  <span>{boothMode ? (isHindi ? "सेल्फ़ी लें" : "Take Selfie") : (isHindi ? "लाइव सेल्फ़ी" : "Live Selfie")}</span>
+                </Link>
+
+                {!boothMode && (
+                  <label className="zt-btn-secondary flex items-center justify-center gap-1 py-2.5 text-xs sm:text-sm font-semibold cursor-pointer text-center">
+                    <span>📁</span>
+                    <span>{isHindi ? "फोटो अपलोड" : "Upload Photo"}</span>
+                    <input
+                      type="file"
+                      accept="image/*"
+                      className="sr-only"
+                      onChange={(event) => {
+                        const file = event.currentTarget.files?.[0];
+                        if (file) {
+                          setSelectedModalScene(c.id as "modi" | "yogi" | "bjp");
+                          setBoothOpen(true);
+                          void choosePhoto(file);
+                        }
+                        event.currentTarget.value = "";
                       }}
-                      className="zt-btn-secondary flex items-center justify-center gap-1.5 py-3 text-xs sm:text-sm font-bold text-center shadow-md border border-amber-500/40"
-                    >
-                      <span>✨</span>
-                      <span>{isHindi ? "AI फोटो बनाएं" : "AI Photo Studio"}</span>
-                    </button>
-                  </>
-                ) : (
-                  <>
-                    <Link
-                      to="/experience/$scene"
-                      params={{ scene: c.id }}
-                      onClick={() => localStorage.setItem("zuitar.deviceMode", "personal")}
-                      className="zt-btn-primary flex items-center justify-center gap-1 py-2 text-xs font-semibold text-center"
-                    >
-                      <span>🤳</span>
-                      <span>{isHindi ? "लाइव सेल्फ़ी" : "Live Selfie"}</span>
-                    </Link>
-                    {c.id !== "bjp" ? (
-                      <Link
-                        to="/experience/$scene"
-                        params={{ scene: c.id }}
-                        search={{ room: "1" }}
-                        onClick={() => localStorage.setItem("zuitar.deviceMode", "personal")}
-                        className="zt-btn-secondary flex items-center justify-center gap-1 py-2 text-xs font-semibold text-center border border-amber-500/30"
-                      >
-                        <span>🏛️</span>
-                        <span>{isHindi ? "3D रूम" : "3D Room"}</span>
-                      </Link>
-                    ) : (
-                      <Link
-                        to="/experience/$scene"
-                        params={{ scene: c.id }}
-                        onClick={() => localStorage.setItem("zuitar.deviceMode", "personal")}
-                        className="zt-btn-secondary flex items-center justify-center gap-1 py-2 text-xs font-semibold text-center"
-                      >
-                        <span>🪷</span>
-                        <span>{isHindi ? "कमल लुक" : "Lotus Look"}</span>
-                      </Link>
-                    )}
-                    <label className="zt-btn-ghost border border-border flex items-center justify-center gap-1 py-2 text-xs font-semibold cursor-pointer text-center">
-                      <span>📁</span>
-                      <span>{isHindi ? "अपलोड" : "Upload"}</span>
-                      <input
-                        type="file"
-                        accept="image/*"
-                        className="sr-only"
-                        onChange={(event) => {
-                          const file = event.currentTarget.files?.[0];
-                          if (file) {
-                            setSelectedModalScene(c.id as "modi" | "yogi" | "bjp");
-                            setBoothOpen(true);
-                            void choosePhoto(file);
-                          }
-                          event.currentTarget.value = "";
-                        }}
-                      />
-                    </label>
-                  </>
+                    />
+                  </label>
                 )}
+
+                <Link
+                  to="/experience/$scene"
+                  params={{ scene: c.id }}
+                  search={{
+                    ...(boothMode ? { mode: "booth" as const } : {}),
+                    ...(candidateId ? { candidate: candidateId } : {}),
+                  }}
+                  onClick={() =>
+                    localStorage.setItem("zuitar.deviceMode", boothMode ? "booth" : "personal")
+                  }
+                  className="zt-btn-ghost border border-border flex items-center justify-center gap-1 py-2.5 text-xs sm:text-sm font-semibold text-center"
+                >
+                  <span>🎥</span>
+                  <span>{isHindi ? "वीडियो" : "Video"}</span>
+                </Link>
               </div>
             </div>
           </div>
@@ -801,12 +807,12 @@ function Home() {
                         {selectedModalScene === "yogi" && (
                           <>
                             {[
-                              { id: "selfie", icon: "🤳", label: { en: "Selfie with CM Yogi Ji", hi: "सीएम योगी जी से सेल्फ़ी" } },
-                              { id: "handshake", icon: "🤝", label: { en: "Handshake with CM Yogi Ji", hi: "सीएम योगी जी से हाथ मिलाएँ" } },
-                              { id: "hug", icon: "🫂", label: { en: "Hug with CM Yogi Ji", hi: "सीएम योगी जी से गले मिलें" } },
-                              { id: "meeting", icon: "💬", label: { en: "Meeting with CM Yogi Ji", hi: "सीएम योगी जी से मुलाक़ात" } },
-                              { id: "scarf", icon: "🧣", label: { en: "Saffron Scarf Honor", hi: "सीएम योगी जी द्वारा अंगवस्त्र सम्मान" } },
-                              { id: "gift", icon: "🎁", label: { en: "Gift / Memento", hi: "सीएम योगी जी को उपहार / स्मृति चिन्ह भेंट" } },
+                              { id: "selfie", icon: "🤳", label: { en: "Selfie with Yogi", hi: "योगी जी से सेल्फी" } },
+                              { id: "handshake", icon: "🤝", label: { en: "Handshake with Yogi", hi: "योगी जी से हाथ मिलाएँ" } },
+                              { id: "hug", icon: "🫂", label: { en: "Hug with Yogi", hi: "योगी जी से गले मिलें" } },
+                              { id: "meeting", icon: "💬", label: { en: "Meeting with Yogi", hi: "योगी जी से मुलाक़ात" } },
+                              { id: "scarf", icon: "🧣", label: { en: "Saffron Scarf", hi: "अंगवस्त्र सम्मान" } },
+                              { id: "gift", icon: "🎁", label: { en: "Gift / Memento", hi: "उपहार / स्मृति चिन्ह भेंट" } },
                             ].map((opt) => (
                               <button
                                 key={opt.id}
@@ -937,7 +943,7 @@ function Home() {
                 <p role="alert" className="text-center text-sm font-medium text-destructive">
                   {aiError}
                 </p>
-                {canRetryAi && lastAttempt && (
+                {lastAttempt && (
                   <button
                     onClick={() => void enhancePhoto(lastAttempt.scene, lastAttempt.interaction)}
                     disabled={aiBusy}
@@ -946,26 +952,76 @@ function Home() {
                     {isHindi ? "दोबारा प्रयास करें (Retry)" : "Retry"}
                   </button>
                 )}
-                {roomAlternative && lastAttempt &&
-                  (lastAttempt.scene === "yogi" || lastAttempt.scene === "modi") && (
-                    <Link
-                      to="/experience/$scene"
-                      params={{ scene: lastAttempt.scene }}
-                      search={{ room: "1" }}
-                      onClick={() => {
-                        setDeviceMode(boothMode);
-                        setBoothOpen(false);
-                      }}
-                      className="zt-btn-secondary text-xs"
-                    >
-                      {isHindi ? "असली फ़ोटो वाले 3D Room में जाएँ" : "Use the original photo in 3D Room"}
-                    </Link>
-                  )}
               </div>
             )}
           </section>
         </div>
       )}
+
+      {/* Contact Section */}
+      <footer className="mt-16 w-full max-w-7xl mx-auto rounded-3xl border border-border/80 bg-card/90 p-6 md:p-8 backdrop-blur text-foreground shadow-xl">
+        <div className="flex flex-col md:flex-row items-center justify-between gap-6">
+          <div className="space-y-2 text-center md:text-left">
+            <div className="flex items-center justify-center md:justify-start gap-2">
+              <span className="text-2xl">🇮🇳</span>
+              <h3 className="text-xl font-bold">बोलता पोस्टर अभियान · ZUITAR</h3>
+            </div>
+            <p className="text-sm text-muted-foreground">
+              {isHindi
+                ? "मोदी जी, योगी जी और भाजपा लुक के साथ डिजिटल प्रचार एवं AI सेल्फी बूथ।"
+                : "Digital campaign & AI selfie booth with Modi ji, Yogi ji and BJP look."}
+            </p>
+            <div className="flex flex-wrap items-center justify-center md:justify-start gap-4 pt-2 text-sm">
+              <span className="flex items-center gap-1.5 font-medium">
+                👤 <span className="text-foreground font-semibold">Aman Pal</span>
+              </span>
+              <span className="flex items-center gap-1.5 text-muted-foreground">
+                📍 <span>Lucknow, Uttar Pradesh</span>
+              </span>
+              <a
+                href="tel:9068734941"
+                className="flex items-center gap-1.5 text-primary hover:underline font-semibold"
+              >
+                📞 <span>+91 9068734941</span>
+              </a>
+              <a
+                href="mailto:zuitaiofficial@gmail.com"
+                className="flex items-center gap-1.5 text-primary hover:underline font-semibold"
+              >
+                ✉️ <span>zuitaiofficial@gmail.com</span>
+              </a>
+            </div>
+          </div>
+          <div className="flex flex-col sm:flex-row items-center gap-3">
+            <a
+              href="https://wa.me/919068734941?text=Namaste%20Aman%20ji,%20hume%20bolta%20poster%20campaign%20ka%20hissa%20banna%20hai."
+              target="_blank"
+              rel="noreferrer"
+              className="zt-btn-primary flex items-center gap-2 px-6 py-3.5 text-sm font-bold shadow-xl bg-emerald-600 hover:bg-emerald-500 text-white rounded-full border-none transition-all hover:scale-105"
+            >
+              <span className="text-xl">💬</span>
+              <span>{isHindi ? "अपना नाम जुड़वाएं (WhatsApp)" : "Request to Add Name"}</span>
+            </a>
+          </div>
+        </div>
+        <div className="mt-6 border-t border-border/60 pt-4 text-center text-xs text-muted-foreground">
+          © {new Date().getFullYear()} ZUITAR · All Rights Reserved · संपर्क: +91 9068734941 · Lucknow, Uttar Pradesh
+        </div>
+      </footer>
+
+      {/* Floating Corner WhatsApp CTA */}
+      <a
+        href="https://wa.me/919068734941?text=Namaste%20Aman%20ji,%20hume%20bolta%20poster%20campaign%20ka%20hissa%20banna%20hai."
+        target="_blank"
+        rel="noreferrer"
+        aria-label="Request to add your name on WhatsApp"
+        className="fixed bottom-6 right-6 z-40 flex items-center gap-2.5 rounded-full bg-emerald-600 hover:bg-emerald-500 px-5 py-3.5 text-white shadow-2xl transition-all duration-300 hover:scale-105 focus:outline-none focus:ring-4 focus:ring-emerald-400/50"
+      >
+        <span className="text-xl">💬</span>
+        <span className="font-bold text-xs sm:text-sm whitespace-nowrap">
+          {isHindi ? "अपना नाम जुड़वाएं" : "Request to Add Name"}
+        </span>
+      </a>
     </main>
   );
 }

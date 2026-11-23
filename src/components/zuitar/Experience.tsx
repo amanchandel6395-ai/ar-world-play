@@ -5,15 +5,13 @@ import { SCENES, type SceneId } from "@/ar/scenes";
 import { startFrontEngine, type EngineHandle, type EngineStatus } from "@/ar/engine/frontEngine";
 import { detectCapabilities, type Caps } from "@/ar/capabilities";
 import { DebugPanel, deviceLabel, type DebugRow } from "@/components/ar/DebugPanel";
-import { WorldAR } from "@/components/ar/WorldAR";
-import { RoomARView } from "@/components/ar/RoomARView";
 import { KIOSK, useDevMode, useIdleReset } from "@/lib/kiosk";
 import { getPublicConfig } from "@/lib/config.functions";
 import type { InteractionId, PublicConfig } from "@/lib/config";
 import { LangToggleLabel, useLang } from "@/lib/i18n";
 import { ResultView } from "./ResultView";
 
-type Phase = "intro" | "live" | "result" | "world";
+type Phase = "intro" | "live" | "result";
 
 export function Experience({ sceneId }: { sceneId: SceneId }) {
   const scene = SCENES[sceneId];
@@ -25,14 +23,7 @@ export function Experience({ sceneId }: { sceneId: SceneId }) {
   const [config, setConfig] = useState<PublicConfig | null>(null);
   const [configError, setConfigError] = useState(false);
   const [caps, setCaps] = useState<Caps | null>(null);
-  const [phase, setPhase] = useState<Phase>(() => {
-    if (typeof window !== "undefined") {
-      const p = new URLSearchParams(window.location.search);
-      if (p.get("room") === "1") return "world";
-    }
-    // Tapping a feature opens the camera straight away (upload + 3D room buttons are on the camera screen).
-    return "live";
-  });
+  const [phase, setPhase] = useState<Phase>("intro");
   const [facing, setFacing] = useState<"user" | "environment">(scene.camera.default);
   const [status, setStatus] = useState<EngineStatus | null>(null);
   const [error, setError] = useState<string | null>(null);
@@ -62,6 +53,8 @@ export function Experience({ sceneId }: { sceneId: SceneId }) {
   }, [fetchConfig]);
 
   const [boothMode, setBoothMode] = useState(false);
+  const candidateId = typeof window !== "undefined" ? new URLSearchParams(window.location.search).get("candidate") : null;
+  const currentCandidate = config?.candidates?.find((c) => c.id === candidateId && c.active);
 
   useEffect(() => {
     setBoothMode(
@@ -202,39 +195,16 @@ export function Experience({ sceneId }: { sceneId: SceneId }) {
     return fallback;
   };
 
-  if (phase === "world" && config) {
-    const yogiCutout =
-      config.characters.yogi.poses.walk || config.characters.yogi.poses.selfie || "/assets/yogi.png";
-    const modiCutout =
-      config.characters.modi.poses.walk || config.characters.modi.poses.selfie || "/assets/modi.png";
-    return (
-      <RoomARView
-        initialCharacter={sceneId === "modi" ? "modi" : sceneId === "both" ? "both" : "yogi"}
-        yogiAsset={yogiCutout}
-        modiAsset={modiCutout}
-        onCapture={(b) => {
-          setPhoto(b);
-          setPhase("result");
-        }}
-        onExit={() => setPhase("live")}
-        onHome={goHome}
-      />
-    );
-  }
-
   if (phase === "result" && photo) {
     return (
       <ResultView
         photo={photo}
         sceneId={sceneId}
         interaction={interaction}
-        allowAi={!!config?.ai.imageReady || !!config?.ai.imageEnabled}
-        allowVideo={!!config?.ai.videoReady}
-        videoConfigured={!!config?.ai.videoEnabled}
-        onOpenRoom={() => {
-          setPhoto(null);
-          setPhase("world");
-        }}
+        allowAi={true}
+        allowVideo={sceneId === "bjp" && !!config?.ai.videoReady}
+        videoConfigured={sceneId === "bjp" && !!config?.ai.videoEnabled}
+        candidate={currentCandidate}
         onRetake={() => {
           setPhoto(null);
           setPhase("live");
@@ -247,8 +217,8 @@ export function Experience({ sceneId }: { sceneId: SceneId }) {
   const title = t[sceneId];
   const subtitle = t[`${sceneId}Sub`];
   const ready = status?.engine && !error;
-  const sceneReady = true;
-  const assetMissing = false;
+  const sceneReady = !!config?.ready[sceneId] || dev;
+  const assetMissing = !sceneReady || (!!ready && !!engine.current?.standIn && !dev);
   const interactions = config?.interactions.filter((i) => i.enabled) ?? [];
   const on = (b?: boolean) => (b ? "on" : "off") as "on" | "off";
   const rows: DebugRow[] = status
@@ -275,11 +245,6 @@ export function Experience({ sceneId }: { sceneId: SceneId }) {
           value: status.segmentation ? "ON" : "OFF",
           state: on(status.segmentation),
         },
-        {
-          label: "WORLD TRACKING",
-          value: caps?.worldAR ? "available (room mode)" : "not supported",
-          state: caps?.worldAR ? "info" : "warn",
-        },
         { label: "BODY STATE", value: status.bodyState },
         { label: "DISTANCE", value: status.distance },
         { label: "FPS", value: String(status.fps) },
@@ -299,6 +264,34 @@ export function Experience({ sceneId }: { sceneId: SceneId }) {
       {phase === "intro" && (
         <div className="absolute inset-0 flex flex-col items-center justify-center gap-8 bg-stage px-6 text-center">
           <p className="text-sm font-semibold uppercase tracking-[0.3em] text-primary">ZUITAR</p>
+          {currentCandidate && (
+            <div className="flex items-center gap-3 rounded-2xl border border-primary/50 bg-card/85 p-3.5 shadow-md max-w-md">
+              {currentCandidate.photoUrl ? (
+                <img
+                  src={currentCandidate.photoUrl}
+                  alt=""
+                  className="h-12 w-12 rounded-full border border-primary object-cover shrink-0"
+                />
+              ) : (
+                <div className="flex h-12 w-12 shrink-0 items-center justify-center rounded-full bg-primary/20 text-lg font-bold text-primary">
+                  {(currentCandidate.name[lang] || currentCandidate.name.hi || "P")[0]}
+                </div>
+              )}
+              <div className="text-left text-xs">
+                <p className="font-bold text-foreground">
+                  {currentCandidate.name[lang] || currentCandidate.name.hi}
+                </p>
+                <p className="text-primary font-semibold">
+                  {currentCandidate.partyRole[lang] || currentCandidate.partyRole.hi} · {currentCandidate.constituency[lang] || currentCandidate.constituency.hi}
+                </p>
+                {currentCandidate.slogan && (
+                  <p className="text-muted-foreground italic">
+                    "{currentCandidate.slogan[lang] || currentCandidate.slogan.hi}"
+                  </p>
+                )}
+              </div>
+            </div>
+          )}
           <h1 className="max-w-2xl text-4xl font-bold leading-tight md:text-6xl">{title}</h1>
           <p className="text-lg text-muted-foreground">{subtitle}</p>
           <div className="flex flex-wrap justify-center gap-2">
@@ -308,7 +301,6 @@ export function Experience({ sceneId }: { sceneId: SceneId }) {
                   ["Camera", caps.camera],
                   ["Face tracking", caps.faceTracking],
                   ["Body tracking", caps.bodyTracking],
-                  ["Room AR", caps.worldAR],
                 ] as const
               ).map(([l, ok]) => (
                 <span
@@ -408,6 +400,11 @@ export function Experience({ sceneId }: { sceneId: SceneId }) {
             <button onClick={goHome} aria-label={t.back} className="zt-btn-round">
               ←
             </button>
+            {currentCandidate && (
+              <div className="pointer-events-none mt-1 rounded-full bg-primary/90 px-3 py-1 text-center text-[11px] font-bold text-primary-foreground shadow">
+                🇮🇳 {currentCandidate.name[lang] || currentCandidate.name.hi}
+              </div>
+            )}
             {ready && assetMissing ? (
               <div
                 role="status"
@@ -529,17 +526,6 @@ export function Experience({ sceneId }: { sceneId: SceneId }) {
                 />
               </div>
               <div className="flex justify-end gap-3">
-                {sceneId !== "bjp" && (
-                  <button
-                    type="button"
-                    onClick={() => setPhase("world")}
-                    className="flex items-center gap-1.5 rounded-full border border-amber-500/50 bg-amber-500/20 px-3.5 py-2 text-xs font-bold text-amber-300 shadow-md backdrop-blur-md transition-all hover:bg-amber-500/30 active:scale-95"
-                    title={lang === "hi" ? "3D रूम में खड़े करें" : "Place in 3D Room"}
-                  >
-                    <span>🏛️</span>
-                    <span>{lang === "hi" ? "3D रूम" : "3D Room"}</span>
-                  </button>
-                )}
                 <button onClick={flip} aria-label={t.flip} className="zt-btn-round">
                   ⟲
                 </button>
