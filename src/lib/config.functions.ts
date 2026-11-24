@@ -1,6 +1,105 @@
 import { createServerFn } from "@tanstack/react-start";
 import { z } from "zod";
-import type { AppConfig } from "./config";
+import { INTERACTIONS } from "./config";
+
+const shortText = z.string().max(500);
+const longText = z.string().max(10_000);
+const assetPath = z.string().max(2_000).nullable();
+const bilingualSchema = z.object({ en: shortText, hi: shortText }).strict();
+const interactionIds = z.enum(INTERACTIONS);
+
+const characterSchema = z
+  .object({
+    enabled: z.boolean(),
+    authorized: z.boolean(),
+    authorizedAt: z.string().nullable(),
+    permissionNote: longText,
+    approvedAssets: z.record(z.string().max(2_000), z.string().max(100)),
+    name: bilingualSchema,
+    reference: assetPath,
+    thumbnail: assetPath,
+    glb: assetPath,
+    poses: z.record(interactionIds, z.string().max(2_000)),
+    animations: z.record(interactionIds, z.string().max(2_000)),
+    scale: z.number(),
+    offsetX: z.number(),
+    offsetY: z.number(),
+    rotationY: z.number(),
+  })
+  .strict();
+
+const bjpItemSchema = z
+  .object({
+    id: z.string().min(1).max(128),
+    kind: z.enum(["cap", "scarf", "flag", "lotus", "art", "background", "frame", "sticker"]),
+    label: shortText,
+    asset: assetPath,
+    approved: z.boolean(),
+    approvedAt: z.string().nullable(),
+    permissionNote: longText,
+    enabled: z.boolean(),
+    anchor: z.enum(["head", "shoulders", "screen", "background"]),
+    scale: z.number(),
+    offsetX: z.number(),
+    offsetY: z.number(),
+    rotation: z.number(),
+    order: z.number(),
+  })
+  .strict();
+
+const interactionSchema = z
+  .object({
+    id: interactionIds,
+    enabled: z.boolean(),
+    label: bilingualSchema,
+    icon: z.string().max(32),
+    imagePrompt: longText,
+    videoPrompt: longText,
+    action: longText,
+  })
+  .strict();
+
+const candidateSchema = z
+  .object({
+    id: z.string().regex(/^[A-Za-z0-9_-]{1,128}$/),
+    name: bilingualSchema,
+    constituency: bilingualSchema,
+    partyRole: bilingualSchema,
+    photoUrl: z.string().max(2_000),
+    slogan: bilingualSchema,
+    phone: z.string().max(40).optional(),
+    active: z.boolean(),
+  })
+  .strict();
+
+export const adminConfigInputSchema = z
+  .object({
+    characters: z.object({ yogi: characterSchema, modi: characterSchema }).strict(),
+    bjp: z.array(bjpItemSchema).max(500),
+    interactions: z.array(interactionSchema).max(INTERACTIONS.length),
+    demo: z.object({ enabled: z.boolean() }).strict(),
+    ai: z
+      .object({
+        imageEnabled: z.boolean(),
+        videoEnabled: z.boolean(),
+        videoVerifiedAt: z.string().nullable(),
+        videoJobs: z.array(z.string().regex(/^[A-Za-z0-9_-]{6,128}$/)).max(100),
+        videoDuration: z.number().min(1).max(30),
+        bjpImagePrompt: longText,
+        bjpVideoPrompt: longText,
+      })
+      .strict(),
+    brand: z
+      .object({
+        title: shortText,
+        tagline: bilingualSchema,
+        idleTimeoutSec: z.number(),
+        resultTimeoutSec: z.number(),
+      })
+      .strict(),
+    candidates: z.array(candidateSchema).max(500).optional(),
+  })
+  .strict();
 
 export const getPublicConfig = createServerFn({ method: "GET" }).handler(async () => {
   const { loadConfig, toPublic } = await import("./config.server");
@@ -12,17 +111,13 @@ export const getPublicConfig = createServerFn({ method: "GET" }).handler(async (
   }
 });
 
-const pw = z.object({ password: z.string().min(1).max(200) });
+const pw = z.object({ password: z.string().min(1).max(200) }).strict();
 
 export const adminLogin = createServerFn({ method: "POST" })
   .inputValidator((d) => pw.parse(d))
-  .handler(async () => {
-    const { loadConfig } = await import("./config.server");
-    return {
-      ok: true as const,
-      config: await loadConfig(),
-      aiKey: !!(process.env["LOVABLE_API_KEY"] || process.env["GEMINI_API_KEY"]),
-    };
+  .handler(async ({ data }) => {
+    const { loadAdminConfigForPassword } = await import("./config.server");
+    return loadAdminConfigForPassword(data.password);
   });
 
 export const adminStatus = createServerFn({ method: "GET" }).handler(async () => {
@@ -54,13 +149,13 @@ export const adminStatus = createServerFn({ method: "GET" }).handler(async () =>
 });
 
 export const adminSave = createServerFn({ method: "POST" })
-  .inputValidator((d) => pw.extend({ config: z.record(z.string(), z.unknown()) }).parse(d))
+  .inputValidator((d) => pw.extend({ config: adminConfigInputSchema }).parse(d))
   .handler(async ({ data }) => {
     const { checkAdmin, saveConfig, loadConfig } = await import("./config.server");
     const { mergeConfig } = await import("./config");
     checkAdmin(data.password);
     const prev = await loadConfig();
-    const next = mergeConfig(data.config as Partial<AppConfig>);
+    const next = mergeConfig(data.config);
     const now = new Date().toISOString();
     // Authorization/approval timestamps are recorded by the server, not trusted from the browser.
     for (const id of ["yogi", "modi"] as const) {

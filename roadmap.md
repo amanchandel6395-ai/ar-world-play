@@ -10,3 +10,4 @@
 - [x] Photo generation: removed the 45-second cutoff and exposed safe service errors; preview upload-to-result returned HTTP 200, and four focused recovery tests passed (three older workflow tests still fail).
 - [x] Backup photo service: Gemini key fallback added in photo route (7 tests pass). Waiting on owner to save GEMINI_API_KEY.
 - [ ] Clarify rejected photo requests and keep uploaded photo previews visible; preserve provider refusals without rerouting.
+- [x] Selected security findings: protect video job routes with the existing booth password, verify the password before admin settings are returned, and validate settings against an explicit field allowlist.

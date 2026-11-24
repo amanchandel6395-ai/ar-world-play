@@ -181,6 +181,15 @@ export function checkAdmin(password: string) {
   if (diff) throw new Error("WRONG_PASSWORD");
 }
 
+export async function loadAdminConfigForPassword(password: string) {
+  checkAdmin(password);
+  return {
+    ok: true as const,
+    config: await loadConfig(),
+    aiKey: !!(process.env["LOVABLE_API_KEY"] || process.env["GEMINI_API_KEY"]),
+  };
+}
+
 export async function toPublic(cfg: AppConfig): Promise<PublicConfig> {
   const hasKey = !!process.env["LOVABLE_API_KEY"];
   const pubChar = async (id: CharacterId) => {
