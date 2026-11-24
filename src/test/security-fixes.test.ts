@@ -1,4 +1,5 @@
 import { afterEach, describe, expect, it, vi } from "vitest";
+import { readFileSync } from "node:fs";
 import { DEFAULT_CONFIG } from "@/lib/config";
 import { adminConfigInputSchema } from "@/lib/config.functions";
 import { loadAdminConfigForPassword } from "@/lib/config.server";
@@ -9,6 +10,19 @@ afterEach(() => {
 });
 
 describe("selected security fixes", () => {
+  it("keeps app configuration private to the server database role", () => {
+    const migration = readFileSync(
+      "drizzle/migrations/0003_restrict_app_config_access.sql",
+      "utf8",
+    );
+    expect(migration).toContain(
+      "REVOKE ALL PRIVILEGES ON TABLE public.app_config FROM PUBLIC, anon, authenticated;",
+    );
+    expect(migration).toContain(
+      "GRANT ALL PRIVILEGES ON TABLE public.app_config TO service_role;",
+    );
+  });
+
   it("requires the booth password before video job creation or polling", async () => {
     vi.stubEnv("ADMIN_PASSWORD", "booth-test-password");
     vi.stubEnv("LOVABLE_API_KEY", "");
