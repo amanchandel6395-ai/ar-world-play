@@ -1,10 +1,144 @@
 import { createServerFn } from "@tanstack/react-start";
+import { z } from "zod";
+import { INTERACTIONS } from "./config";
 
-/**
- * Public configuration endpoint.
- * Returns browser-safe public assets, scene configs, and enabled options.
- * Does not expose any administration controls or secret keys.
- */
+const shortText = z.string().max(500);
+const longText = z.string().max(10_000);
+const assetPath = z.string().max(2_000).nullable();
+const bilingualSchema = z.object({ en: shortText, hi: shortText }).strict();
+const interactionIds = z.enum(INTERACTIONS);
+
+const characterSchema = z
+  .object({
+    enabled: z.boolean(),
+    authorized: z.boolean(),
+    authorizedAt: z.string().nullable(),
+    permissionNote: longText,
+    approvedAssets: z.record(z.string().max(2_000), z.string().max(100)),
+    name: bilingualSchema,
+    reference: assetPath,
+    thumbnail: assetPath,
+    glb: assetPath,
+    poses: z.record(interactionIds, z.string().max(2_000)),
+    animations: z.record(interactionIds, z.string().max(2_000)),
+    heightCm: z.number().optional(),
+    depthBevel: z.number().optional(),
+    video: z
+      .object({
+        enabled: z.boolean(),
+        url: z.string().max(2_000),
+        loop: z.boolean().optional(),
+        muted: z.boolean().optional(),
+        chromaKey: z
+          .object({
+            enabled: z.boolean(),
+            color: z.string().max(32),
+            similarity: z.number(),
+            smoothness: z.number(),
+          })
+          .strict()
+          .optional(),
+      })
+      .strict()
+      .optional(),
+    scale: z.number(),
+    offsetX: z.number(),
+    offsetY: z.number(),
+    rotationY: z.number(),
+  })
+  .strict();
+
+const bjpItemSchema = z
+  .object({
+    id: z.string().min(1).max(128),
+    kind: z.enum(["cap", "scarf", "flag", "lotus", "art", "background", "frame", "sticker"]),
+    label: shortText,
+    asset: assetPath,
+    approved: z.boolean(),
+    approvedAt: z.string().nullable(),
+    permissionNote: longText,
+    enabled: z.boolean(),
+    anchor: z.enum(["head", "shoulders", "screen", "background"]),
+    scale: z.number(),
+    offsetX: z.number(),
+    offsetY: z.number(),
+    rotation: z.number(),
+    order: z.number(),
+  })
+  .strict();
+
+const customStandeeSchema = z
+  .object({
+    id: z.string().min(1).max(128),
+    name: bilingualSchema,
+    type: z.enum(["image", "video"]),
+    assetUrl: z.string().max(2_000),
+    thumbnail: z.string().max(2_000),
+    scale: z.number(),
+    heightCm: z.number(),
+    offsetX: z.number(),
+    offsetY: z.number(),
+    depthBevel: z.number(),
+    shadowOpacity: z.number(),
+    enabled: z.boolean(),
+  })
+  .strict();
+
+const interactionSchema = z
+  .object({
+    id: interactionIds,
+    enabled: z.boolean(),
+    label: bilingualSchema,
+    icon: z.string().max(32),
+    imagePrompt: longText,
+    videoPrompt: longText,
+    action: longText,
+  })
+  .strict();
+
+const candidateSchema = z
+  .object({
+    id: z.string().regex(/^[A-Za-z0-9_-]{1,128}$/),
+    name: bilingualSchema,
+    constituency: bilingualSchema,
+    partyRole: bilingualSchema,
+    photoUrl: z.string().max(2_000),
+    slogan: bilingualSchema,
+    phone: z.string().max(40).optional(),
+    active: z.boolean(),
+  })
+  .strict();
+
+export const adminConfigInputSchema = z
+  .object({
+    characters: z.object({ yogi: characterSchema, modi: characterSchema }).strict(),
+    bjp: z.array(bjpItemSchema).max(500),
+    customStandees: z.array(customStandeeSchema).max(500),
+    interactions: z.array(interactionSchema).max(INTERACTIONS.length),
+    demo: z.object({ enabled: z.boolean() }).strict(),
+    ai: z
+      .object({
+        imageEnabled: z.boolean(),
+        videoEnabled: z.boolean(),
+        videoVerifiedAt: z.string().nullable(),
+        videoJobs: z.array(z.string().regex(/^[A-Za-z0-9_-]{6,128}$/)).max(100),
+        videoDuration: z.number().min(1).max(30),
+        bjpImagePrompt: longText,
+        bjpVideoPrompt: longText,
+      })
+      .strict(),
+    brand: z
+      .object({
+        title: shortText,
+        tagline: bilingualSchema,
+        idleTimeoutSec: z.number(),
+        resultTimeoutSec: z.number(),
+      })
+      .strict(),
+    candidates: z.array(candidateSchema).max(500).optional(),
+  })
+  .strict();
+
 export const getPublicConfig = createServerFn({ method: "GET" }).handler(async () => {
   const { loadConfig, toPublic } = await import("./config.server");
   try {
@@ -14,3 +148,150 @@ export const getPublicConfig = createServerFn({ method: "GET" }).handler(async (
     return toPublicDefault();
   }
 });
+
+const pw = z.object({ password: z.string().min(1).max(200) }).strict();
+
+export const adminLogin = createServerFn({ method: "POST" })
+  .inputValidator((d) => pw.parse(d))
+  .handler(async ({ data }) => {
+    const { loadAdminConfigForPassword } = await import("./config.server");
+    return loadAdminConfigForPassword(data.password);
+  });
+
+export const adminStatus = createServerFn({ method: "GET" }).handler(async () => {
+  let storage = false;
+  let captures = false;
+  let database = false;
+  try {
+    const { admin } = await import("./config.server");
+    const sb = await admin();
+    if (sb) {
+      const { error } = await sb.storage.from("assets").list("", { limit: 1 });
+      storage = !error;
+      const captureCheck = await sb.storage.from("captures").list("", { limit: 1 });
+      captures = !captureCheck.error;
+      const configCheck = await sb.from("app_config").select("id").eq("id", "main").maybeSingle();
+      database = !configCheck.error;
+    }
+  } catch {
+    storage = false;
+  }
+  return {
+    adminPassword: true, // Always accessible: defaults to admin123 if ADMIN_PASSWORD is unset
+    hasCustomPassword: !!process.env["ADMIN_PASSWORD"],
+    aiKey: !!(process.env["LOVABLE_API_KEY"] || process.env["GEMINI_API_KEY"]),
+    storage,
+    captures,
+    database,
+  };
+});
+
+export const adminSave = createServerFn({ method: "POST" })
+  .inputValidator((d) => pw.extend({ config: adminConfigInputSchema }).parse(d))
+  .handler(async ({ data }) => {
+    const { checkAdmin, saveConfig, loadConfig } = await import("./config.server");
+    const { mergeConfig } = await import("./config");
+    checkAdmin(data.password);
+    const prev = await loadConfig();
+    const next = mergeConfig(data.config);
+    const now = new Date().toISOString();
+    // Authorization/approval timestamps are recorded by the server, not trusted from the browser.
+    for (const id of ["yogi", "modi"] as const) {
+      const c = next.characters[id];
+      if (c.authorized && !c.permissionNote.trim()) {
+        c.permissionNote = `Admin authorized likeness (${id}) at ${now}`;
+      }
+      c.authorizedAt = c.authorized
+        ? prev.characters[id].authorized
+          ? (prev.characters[id].authorizedAt ?? now)
+          : now
+        : null;
+      c.approvedAssets = Object.fromEntries(
+        Object.values(c.poses)
+          .filter((p): p is string => !!p)
+          .map((p) => [p, prev.characters[id].approvedAssets[p] ?? now]),
+      );
+    }
+    next.bjp = next.bjp.map((b) => {
+      const old = prev.bjp.find((o) => o.id === b.id);
+      const sameAsset = old && old.asset === b.asset;
+      return {
+        ...b,
+        approvedAt: b.approved
+          ? old?.approved && sameAsset
+            ? (old.approvedAt ?? now)
+            : now
+          : null,
+      };
+    });
+    // Video verification is only set by adminMarkVideoVerified after a real end-to-end run.
+    const unchangedArtwork =
+      JSON.stringify(next.bjp.map((b) => [b.asset, b.approved, b.enabled])) ===
+      JSON.stringify(prev.bjp.map((b) => [b.asset, b.approved, b.enabled]));
+    next.ai.videoVerifiedAt =
+      next.ai.videoEnabled && unchangedArtwork && next.ai.bjpVideoPrompt === prev.ai.bjpVideoPrompt
+        ? prev.ai.videoVerifiedAt
+        : null;
+    next.ai.videoJobs = prev.ai.videoJobs;
+    await saveConfig(next);
+    return { ok: true, config: next };
+  });
+
+/** Records a successful end-to-end video test: the finished MP4 must exist in private storage. */
+export const adminMarkVideoVerified = createServerFn({ method: "POST" })
+  .inputValidator((d) => pw.extend({ id: z.string().regex(/^[A-Za-z0-9_-]{6,128}$/) }).parse(d))
+  .handler(async ({ data }) => {
+    const { checkAdmin, admin, loadConfig, saveConfig } = await import("./config.server");
+    checkAdmin(data.password);
+    const sb = await admin();
+    if (!sb) return { ok: false as const };
+    const cfg = await loadConfig();
+    const { bjpReady } = await import("./config.server");
+    if (!cfg.ai.videoEnabled || !bjpReady(cfg) || !cfg.ai.videoJobs.includes(data.id))
+      return { ok: false as const };
+    const { data: f } = await sb.storage.from("captures").download(`videos/${data.id}.mp4`);
+    if (!f || f.size < 12) return { ok: false as const };
+    const header = new Uint8Array(await f.slice(0, 12).arrayBuffer());
+    if (String.fromCharCode(...header.slice(4, 8)) !== "ftyp") return { ok: false as const };
+    cfg.ai.videoVerifiedAt = new Date().toISOString();
+    await saveConfig(cfg);
+    return { ok: true as const, at: cfg.ai.videoVerifiedAt };
+  });
+
+/** Signed direct-upload URL into the private assets bucket (admin only). */
+export const adminUploadUrl = createServerFn({ method: "POST" })
+  .inputValidator((d) =>
+    pw
+      .extend({
+        name: z.string().min(1).max(200),
+        folder: z.string().regex(/^[a-z0-9-]{1,40}$/),
+        size: z.number().int().positive(),
+      })
+      .parse(d),
+  )
+  .handler(async ({ data }) => {
+    const { checkAdmin, admin } = await import("./config.server");
+    checkAdmin(data.password);
+    const ext = (data.name.split(".").pop() ?? "bin")
+      .toLowerCase()
+      .replace(/[^a-z0-9]/g, "")
+      .slice(0, 5);
+    if (!["png", "jpg", "jpeg", "webp", "glb", "gltf"].includes(ext))
+      throw new Error("Unsupported file type");
+    const max = ext === "glb" || ext === "gltf" ? 30_000_000 : 10_000_000;
+    if (data.size > max) throw new Error("File too large");
+    const path = `${data.folder}/${crypto.randomUUID()}.${ext}`;
+    const sb = await admin();
+    if (!sb) throw new Error("Upload not available: private storage is not configured.");
+    const { data: up, error } = await sb.storage.from("assets").createSignedUploadUrl(path);
+    if (error || !up) throw new Error("Upload not available");
+    return { path, token: up.token, signedUrl: up.signedUrl };
+  });
+
+export const adminPreview = createServerFn({ method: "POST" })
+  .inputValidator((d) => pw.extend({ path: z.string().max(300) }).parse(d))
+  .handler(async ({ data }) => {
+    const { checkAdmin, signPath } = await import("./config.server");
+    checkAdmin(data.password);
+    return { url: await signPath(data.path, 600) };
+  });
