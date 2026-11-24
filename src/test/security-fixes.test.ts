@@ -46,5 +46,24 @@ describe("selected security fixes", () => {
     const malicious = structuredClone(DEFAULT_CONFIG);
     Object.assign(malicious.characters.yogi, { adminInjected: true });
     expect(adminConfigInputSchema.safeParse(malicious).success).toBe(false);
+
+    const withCustomStandee = structuredClone(DEFAULT_CONFIG);
+    withCustomStandee.customStandees = [
+      {
+        id: "custom-test",
+        name: { en: "Test standee", hi: "टेस्ट कटआउट" },
+        type: "image",
+        assetUrl: "/assets/test.png",
+        thumbnail: "/assets/test.png",
+        scale: 1,
+        heightCm: 175,
+        offsetX: 0,
+        offsetY: 0,
+        depthBevel: 0.8,
+        shadowOpacity: 0.7,
+        enabled: true,
+      },
+    ];
+    expect(adminConfigInputSchema.safeParse(withCustomStandee).success).toBe(true);
   });
 });

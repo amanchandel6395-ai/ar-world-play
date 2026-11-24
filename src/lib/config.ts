@@ -31,6 +31,15 @@ export type Character = {
   glb: string | null;
   poses: Partial<Record<InteractionId, string>>;
   animations: Partial<Record<InteractionId, string>>;
+  heightCm?: number;
+  depthBevel?: number;
+  video?: {
+    enabled: boolean;
+    url: string;
+    loop?: boolean;
+    muted?: boolean;
+    chromaKey?: { enabled: boolean; color: string; similarity: number; smoothness: number };
+  };
   scale: number;
   offsetX: number;
   offsetY: number;
@@ -60,6 +69,21 @@ export type BjpItem = {
   order: number;
 };
 
+export type CustomStandee = {
+  id: string;
+  name: Bilingual;
+  type: "image" | "video";
+  assetUrl: string;
+  thumbnail: string;
+  scale: number;
+  heightCm: number;
+  offsetX: number;
+  offsetY: number;
+  depthBevel: number;
+  shadowOpacity: number;
+  enabled: boolean;
+};
+
 export type Interaction = {
   id: InteractionId;
   enabled: boolean;
@@ -75,6 +99,7 @@ export type Interaction = {
 export type AppConfig = {
   characters: Record<CharacterId, Character>;
   bjp: BjpItem[];
+  customStandees: CustomStandee[];
   interactions: Interaction[];
   /** Independent switch for the fictional, post-capture test experience. */
   demo: { enabled: boolean };
@@ -157,6 +182,7 @@ export const DEFAULT_CONFIG: AppConfig = {
     modi: char("PM Narendra Modi", "प्रधानमंत्री नरेंद्र मोदी"),
   },
   bjp: [],
+  customStandees: [],
   interactions: [
     ix("selfie", "🤳", "Selfie", "सेल्फ़ी", "standing side by side taking a selfie"),
     ix("namaste", "🙏", "Namaste", "नमस्ते", "greeting each other with folded hands in namaste"),
@@ -234,6 +260,7 @@ export function mergeConfig(stored: unknown): AppConfig {
         approvedAt: b.approvedAt ?? null,
         permissionNote: b.permissionNote ?? "",
       })),
+    customStandees: Array.isArray(s.customStandees) ? s.customStandees : d.customStandees,
     interactions: d.interactions.map((di) => ({
       ...di,
       ...(s.interactions?.find((x) => x.id === di.id) ?? {}),
@@ -260,7 +287,7 @@ export function toPublicDefault(): PublicConfig {
     demo: { aiReady: false },
     ready: { yogi: false, modi: false, bjp: false },
     brand: c.brand,
-    candidates: c.candidates,
+    ...(c.candidates ? { candidates: c.candidates } : {}),
   };
 }
 

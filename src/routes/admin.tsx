@@ -301,7 +301,6 @@ function AdminPage() {
               e.preventDefault();
               void run(async () => {
                 const result = await login({ data: { password } });
-                if (!result.ok) throw new Error(result.reason);
                 setConfig(result.config);
               });
             }}

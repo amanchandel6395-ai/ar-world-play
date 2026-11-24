@@ -441,7 +441,7 @@ export function ResultView({
       const fd = new FormData();
       fd.append("image", photo, "capture.jpg");
       fd.append("scene", sceneId);
-      fd.append("interaction", interaction);
+      fd.append("interaction", selectedInteraction);
       const res = await fetch("/api/video", { method: "POST", body: fd });
       const j = (await res.json().catch(() => ({}))) as { id?: string; code?: string };
       if (!res.ok || !j.id) return fail(codeMsg(j.code, "video"));
@@ -756,7 +756,7 @@ export function ResultView({
           <div className="flex flex-col items-center gap-2 rounded-2xl border border-destructive/40 bg-destructive/10 p-3">
             <p className="text-center text-sm font-medium text-destructive">{msg}</p>
             {allowAi && !aiPhoto && (
-              <button onClick={enhance} disabled={aiBusy} className="zt-btn-secondary text-xs">
+              <button onClick={() => void enhance()} disabled={aiBusy} className="zt-btn-secondary text-xs">
                 {t.retry}
               </button>
             )}

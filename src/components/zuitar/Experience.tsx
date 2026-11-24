@@ -55,6 +55,11 @@ export function Experience({ sceneId }: { sceneId: SceneId }) {
   const [boothMode, setBoothMode] = useState(false);
   const candidateId = typeof window !== "undefined" ? new URLSearchParams(window.location.search).get("candidate") : null;
   const currentCandidate = config?.candidates?.find((c) => c.id === candidateId && c.active);
+  const sceneAssetsReady = config
+    ? sceneId === "both"
+      ? config.ready.yogi && config.ready.modi
+      : config.ready[sceneId]
+    : false;
 
   useEffect(() => {
     setBoothMode(
@@ -123,7 +128,7 @@ export function Experience({ sceneId }: { sceneId: SceneId }) {
       count > 0 ||
       !engine.current ||
       (engine.current.standIn && !dev) ||
-      (!config?.ready[sceneId] && !dev)
+      (!sceneAssetsReady && !dev)
     )
       return;
     let n = scene.capture.countdown;
@@ -204,7 +209,7 @@ export function Experience({ sceneId }: { sceneId: SceneId }) {
         allowAi={true}
         allowVideo={sceneId === "bjp" && !!config?.ai.videoReady}
         videoConfigured={sceneId === "bjp" && !!config?.ai.videoEnabled}
-        candidate={currentCandidate}
+        {...(currentCandidate ? { candidate: currentCandidate } : {})}
         onRetake={() => {
           setPhoto(null);
           setPhase("live");
@@ -217,7 +222,7 @@ export function Experience({ sceneId }: { sceneId: SceneId }) {
   const title = t[sceneId];
   const subtitle = t[`${sceneId}Sub`];
   const ready = status?.engine && !error;
-  const sceneReady = !!config?.ready[sceneId] || dev;
+  const sceneReady = sceneAssetsReady || dev;
   const assetMissing = !sceneReady || (!!ready && !!engine.current?.standIn && !dev);
   const interactions = config?.interactions.filter((i) => i.enabled) ?? [];
   const on = (b?: boolean) => (b ? "on" : "off") as "on" | "off";

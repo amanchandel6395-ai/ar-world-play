@@ -21,6 +21,26 @@ const characterSchema = z
     glb: assetPath,
     poses: z.record(interactionIds, z.string().max(2_000)),
     animations: z.record(interactionIds, z.string().max(2_000)),
+    heightCm: z.number().optional(),
+    depthBevel: z.number().optional(),
+    video: z
+      .object({
+        enabled: z.boolean(),
+        url: z.string().max(2_000),
+        loop: z.boolean().optional(),
+        muted: z.boolean().optional(),
+        chromaKey: z
+          .object({
+            enabled: z.boolean(),
+            color: z.string().max(32),
+            similarity: z.number(),
+            smoothness: z.number(),
+          })
+          .strict()
+          .optional(),
+      })
+      .strict()
+      .optional(),
     scale: z.number(),
     offsetX: z.number(),
     offsetY: z.number(),
@@ -44,6 +64,23 @@ const bjpItemSchema = z
     offsetY: z.number(),
     rotation: z.number(),
     order: z.number(),
+  })
+  .strict();
+
+const customStandeeSchema = z
+  .object({
+    id: z.string().min(1).max(128),
+    name: bilingualSchema,
+    type: z.enum(["image", "video"]),
+    assetUrl: z.string().max(2_000),
+    thumbnail: z.string().max(2_000),
+    scale: z.number(),
+    heightCm: z.number(),
+    offsetX: z.number(),
+    offsetY: z.number(),
+    depthBevel: z.number(),
+    shadowOpacity: z.number(),
+    enabled: z.boolean(),
   })
   .strict();
 
@@ -76,6 +113,7 @@ export const adminConfigInputSchema = z
   .object({
     characters: z.object({ yogi: characterSchema, modi: characterSchema }).strict(),
     bjp: z.array(bjpItemSchema).max(500),
+    customStandees: z.array(customStandeeSchema).max(500),
     interactions: z.array(interactionSchema).max(INTERACTIONS.length),
     demo: z.object({ enabled: z.boolean() }).strict(),
     ai: z
