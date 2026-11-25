@@ -7,6 +7,7 @@ import type { SceneId } from "@/ar/scenes";
 import type { InteractionId, Candidate } from "@/lib/config";
 import { useLang } from "@/lib/i18n";
 import { getEnhancePrompt } from "@/lib/enhance-prompt";
+import { createLeaderComposite } from "@/lib/photo-compositor";
 
 export const CAMPAIGN_SLOGANS = [
   "अबकी बार 400 पार, मोदी-योगी सरकार",
@@ -320,18 +321,40 @@ export function ResultView({
         }
       }
 
-      // 3. Client-side Polling / HuggingFace fallback
+      // 3. Client-side Pollinations AI fallback
       if (!b64) {
         try {
           const prompt = encodeURIComponent(getEnhancePrompt(sceneId, targetIx));
           const pollinationsUrl = `https://image.pollinations.ai/prompt/${prompt}?width=1024&height=1024&nologo=true&seed=${Math.floor(Math.random() * 100000)}`;
-          const pollRes = await fetch(pollinationsUrl);
+          const pollRes = await fetch(pollinationsUrl, { signal: AbortSignal.timeout(8000) });
           if (pollRes.ok) {
             const pollBlob = await pollRes.blob();
-            b64 = await toBase64(pollBlob);
+            if (pollBlob && pollBlob.size > 1000) {
+              b64 = await toBase64(pollBlob);
+            }
           }
         } catch (e) {
           console.warn("Pollinations fallback failed:", e);
+        }
+      }
+
+      // 4. Guaranteed 100% Photo Booth Composite (Customer + Leader Cutout + Slogan Banner)
+      if (!b64) {
+        try {
+          const photoUrl = URL.createObjectURL(photo);
+          const compositeDataUrl = await createLeaderComposite(photoUrl, {
+            scene: sceneId,
+            interaction: targetIx,
+            slogan: selectedSlogan || undefined,
+            candidateName: candidate?.name[lang] || candidate?.name.hi,
+            candidateConstituency: candidate?.constituency[lang] || candidate?.constituency.hi,
+          });
+          URL.revokeObjectURL(photoUrl);
+          if (compositeDataUrl.startsWith("data:image")) {
+            b64 = compositeDataUrl.split(",")[1];
+          }
+        } catch (e) {
+          console.warn("Composite fallback failed:", e);
         }
       }
 

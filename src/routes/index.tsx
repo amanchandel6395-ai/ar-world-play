@@ -10,6 +10,7 @@ import { useDevMode } from "@/lib/kiosk";
 import { LangToggleLabel, useLang } from "@/lib/i18n";
 import { resolveCandidateFromEnv } from "@/lib/candidateResolver";
 import { getEnhancePrompt } from "@/lib/enhance-prompt";
+import { createLeaderComposite } from "@/lib/photo-compositor";
 
 export const Route = createFileRoute("/")({
   head: () => ({
@@ -263,67 +264,77 @@ function Home() {
     setAiError(null);
     setLastAttempt({ scene, interaction });
     try {
-      let b64Result: string | null = null;
+      let finalResultDataUrl: string | null = null;
 
-      // Tier 1: Try internal backend API (/api/enhance)
+      // Tier 1: Try AI Generation with Pollinations AI (free, public, no passwords or keys required)
       try {
-        const image = await (await fetch(photo)).blob();
-        const form = new FormData();
-        form.append("image", image, "customer-photo.jpg");
-        form.append("scene", scene);
-        form.append("interaction", interaction);
-        const response = await fetch("/api/enhance", { method: "POST", body: form });
-        if (response.ok) {
-          const result = (await response.json().catch(() => ({}))) as { b64?: string; code?: string };
-          if (result.b64) {
-            b64Result = result.b64;
+        const prompt = getEnhancePrompt(scene, interaction);
+        const encoded = encodeURIComponent(prompt);
+        const pollUrl = `https://image.pollinations.ai/prompt/${encoded}?width=768&height=1024&nologo=true&seed=${Math.floor(Math.random() * 100000)}`;
+        const controller = new AbortController();
+        const timeoutId = setTimeout(() => controller.abort(), 7500);
+        const res = await fetch(pollUrl, { signal: controller.signal });
+        clearTimeout(timeoutId);
+        if (res.ok) {
+          const blob = await res.blob();
+          if (blob && blob.size > 1000) {
+            const reader = new FileReader();
+            finalResultDataUrl = await new Promise((resolve) => {
+              reader.onloadend = () => resolve(reader.result as string);
+              reader.readAsDataURL(blob);
+            });
           }
         }
       } catch (err) {
-        console.warn("Backend /api/enhance failed, trying client-side fallback...", err);
+        console.warn("Pollinations AI attempt timed out or failed:", err);
       }
 
-      // Tier 2: Client-side Puter.js fallback (free, runs directly in browser, no server keys needed)
-      if (!b64Result && typeof window !== "undefined") {
+      // Tier 2: Try internal backend API (/api/enhance) if configured
+      if (!finalResultDataUrl) {
         try {
-          const prompt = getEnhancePrompt(scene, interaction);
-          const puter = (window as any).puter;
-          if (puter?.ai?.txt2img) {
-            const imgEl = await puter.ai.txt2img(prompt);
-            if (imgEl && imgEl.src && imgEl.src.startsWith("data:image")) {
-              b64Result = imgEl.src.split(",")[1];
+          const image = await (await fetch(photo)).blob();
+          const form = new FormData();
+          form.append("image", image, "customer-photo.jpg");
+          form.append("scene", scene);
+          form.append("interaction", interaction);
+          const response = await fetch("/api/enhance", { method: "POST", body: form, signal: AbortSignal.timeout(4000) });
+          if (response.ok) {
+            const result = (await response.json().catch(() => ({}))) as { b64?: string };
+            if (result.b64) {
+              finalResultDataUrl = `data:image/jpeg;base64,${result.b64}`;
             }
           }
-        } catch (e) {
-          console.warn("Puter fallback failed:", e);
+        } catch (err) {
+          console.warn("Backend /api/enhance failed:", err);
         }
       }
 
-      // Tier 3: Seamless fallback to customer's photo if AI models are temporarily offline
-      if (!b64Result) {
-        setAiPhoto(photo);
-        setShowAi(true);
-        setModalQr(null);
-        if (boothMode) {
-          setTimeout(() => {
-            void makeModalQrWithPhoto(photo);
-          }, 100);
-        }
-        return;
+      // Tier 3: Guaranteed 100% Photo Booth Composite (Customer + CM Yogi / PM Modi cutout + Slogan banner)
+      if (!finalResultDataUrl) {
+        finalResultDataUrl = await createLeaderComposite(photo, {
+          scene,
+          interaction,
+          candidateName: currentCandidate?.name[lang] || currentCandidate?.name.hi,
+          candidateConstituency: currentCandidate?.constituency[lang] || currentCandidate?.constituency.hi,
+        });
       }
 
-      setAiPhoto(`data:image/jpeg;base64,${b64Result}`);
+      setAiPhoto(finalResultDataUrl);
       setShowAi(true);
       setModalQr(null);
       if (boothMode) {
         setTimeout(() => {
-          void makeModalQrWithPhoto(`data:image/jpeg;base64,${b64Result}`);
+          void makeModalQrWithPhoto(finalResultDataUrl!);
         }, 100);
       }
     } catch (error) {
-      setAiError(
-        error instanceof Error ? error.message : isHindi ? "AI edit विफल हुआ।" : "AI edit failed.",
-      );
+      try {
+        const fallback = await createLeaderComposite(photo, { scene, interaction });
+        setAiPhoto(fallback);
+        setShowAi(true);
+      } catch {
+        setAiError(isHindi ? "फोटो तैयार नहीं हो सकी।" : "Photo could not be created.");
+      }
     } finally {
       setAiBusy(false);
     }
