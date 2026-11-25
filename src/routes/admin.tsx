@@ -106,8 +106,11 @@ function AdminPage() {
     return {
       enableYogi: true,
       enableModi: true,
+      enableYogiGeneration: true,
+      enableModiGeneration: true,
+      enableBjpGeneration: true,
       enableBoothMode: true,
-      enablePhoneMode: true,
+      enablePhoneMode: false,
       bjpTheme: true,
       aiEnhancement: true,
       contactPhone: "9068734941",
@@ -581,6 +584,49 @@ function AdminPage() {
                     checked={settings.enableModi}
                     onCheckedChange={v => setSettings((s: any) => ({ ...s, enableModi: v }))}
                   />
+                </div>
+
+                {/* Politician AI Photo Generation Stop Controls */}
+                <div className="rounded-xl border border-orange-200 bg-orange-50/50 p-4 space-y-3 dark:bg-orange-950/20 dark:border-orange-800">
+                  <p className="text-xs font-bold uppercase tracking-wider text-orange-700 dark:text-orange-400">
+                    नेताओं की फोटो जेनरेशन नियंत्रण (Stop / Enable Generation)
+                  </p>
+                  <p className="text-xs text-muted-foreground">
+                    यहाँ से आप किसी भी नेता के साथ यूजर्स की AI फोटो जेनरेशन को तुरंत बंद या चालू कर सकते हैं।
+                  </p>
+
+                  <div className="flex items-center justify-between pt-2 border-t border-orange-200/60 dark:border-orange-800/60">
+                    <div>
+                      <p className="font-semibold text-sm">सीएम योगी जी फोटो जेनरेशन (Yogi Ji Generation)</p>
+                      <p className="text-xs text-muted-foreground">बंद करने पर यूजर्स योगी जी के साथ फोटो नहीं बना पाएंगे</p>
+                    </div>
+                    <Switch
+                      checked={settings.enableYogiGeneration !== false}
+                      onCheckedChange={v => setSettings((s: any) => ({ ...s, enableYogiGeneration: v }))}
+                    />
+                  </div>
+
+                  <div className="flex items-center justify-between pt-2 border-t border-orange-200/60 dark:border-orange-800/60">
+                    <div>
+                      <p className="font-semibold text-sm">पीएम मोदी जी फोटो जेनरेशन (Modi Ji Generation)</p>
+                      <p className="text-xs text-muted-foreground">बंद करने पर यूजर्स मोदी जी के साथ फोटो नहीं बना पाएंगे</p>
+                    </div>
+                    <Switch
+                      checked={settings.enableModiGeneration !== false}
+                      onCheckedChange={v => setSettings((s: any) => ({ ...s, enableModiGeneration: v }))}
+                    />
+                  </div>
+
+                  <div className="flex items-center justify-between pt-2 border-t border-orange-200/60 dark:border-orange-800/60">
+                    <div>
+                      <p className="font-semibold text-sm">भाजपा लुक फोटो जेनरेशन (BJP Look Generation)</p>
+                      <p className="text-xs text-muted-foreground">बंद करने पर यूजर्स भाजपा लुक वाली फोटो नहीं बना पाएंगे</p>
+                    </div>
+                    <Switch
+                      checked={settings.enableBjpGeneration !== false}
+                      onCheckedChange={v => setSettings((s: any) => ({ ...s, enableBjpGeneration: v }))}
+                    />
+                  </div>
                 </div>
 
                 <div className="flex items-center justify-between py-1 border-t pt-4">

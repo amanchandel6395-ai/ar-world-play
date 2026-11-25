@@ -81,10 +81,27 @@ function Home() {
   const [dev, setDev] = useDevMode();
   const [flash, setFlash] = useState<string | null>(null);
   const [lang, setLang, t] = useLang();
-  const [boothMode, setBoothMode] = useState(false);
-  const setDeviceMode = (booth: boolean) => {
-    localStorage.setItem("zuitar.deviceMode", booth ? "booth" : "personal");
-    setBoothMode(booth);
+  // Standard mode is Booth Mode with instant QR mobile handoff + direct sharing
+  const boothMode = true;
+  const [adminSettings, setAdminSettings] = useState(() => {
+    try {
+      const saved = typeof window !== "undefined" ? localStorage.getItem("zuitar_admin_settings") : null;
+      if (saved) return JSON.parse(saved);
+    } catch {}
+    return {
+      enableYogi: true,
+      enableModi: true,
+      enableYogiGeneration: true,
+      enableModiGeneration: true,
+      enableBjpGeneration: true,
+    };
+  });
+
+  const isPoliticianStopped = (id: string) => {
+    if (id === "yogi" && adminSettings.enableYogiGeneration === false) return true;
+    if (id === "modi" && adminSettings.enableModiGeneration === false) return true;
+    if (id === "bjp" && adminSettings.enableBjpGeneration === false) return true;
+    return false;
   };
   const fetchConfig = useServerFn(getPublicConfig);
   const [candidates, setCandidates] = useState<Candidate[]>([]);
@@ -122,10 +139,10 @@ function Home() {
   const candidateId = currentCandidate?.id || (typeof window !== "undefined" ? new URLSearchParams(window.location.search).get("candidate") : null);
 
   useEffect(() => {
-    setBoothMode(
-      new URLSearchParams(window.location.search).get("mode") === "booth" ||
-        localStorage.getItem("zuitar.deviceMode") === "booth",
-    );
+    try {
+      const saved = localStorage.getItem("zuitar_admin_settings");
+      if (saved) setAdminSettings(JSON.parse(saved));
+    } catch {}
     fetchConfig()
       .then((c) => {
         setReady(c.ready);
@@ -145,41 +162,34 @@ function Home() {
     setCameraReady(false);
     setCameraError(null);
 
-    if (!navigator.mediaDevices?.getUserMedia) {
-      setCameraError(
-        isHindi
-          ? "इस ब्राउज़र में कैमरा उपलब्ध नहीं है।"
-          : "Camera access is not available in this browser.",
-      );
-      return;
+    // Try starting webcam preview if available, but never block or error if unavailable
+    if (navigator.mediaDevices?.getUserMedia) {
+      navigator.mediaDevices
+        .getUserMedia({ video: { facingMode }, audio: false })
+        .then((stream) => {
+          if (!active) {
+            stream.getTracks().forEach((track) => track.stop());
+            return;
+          }
+          streamRef.current = stream;
+          if (videoRef.current) {
+            videoRef.current.srcObject = stream;
+            setCameraReady(true);
+          }
+        })
+        .catch(() => {
+          // Gracefully fallback to native device camera / photo picker without showing any error
+          setCameraReady(false);
+          setCameraError(null);
+        });
     }
-
-    navigator.mediaDevices
-      .getUserMedia({ video: { facingMode }, audio: false })
-      .then((stream) => {
-        if (!active) {
-          stream.getTracks().forEach((track) => track.stop());
-          return;
-        }
-        streamRef.current = stream;
-        if (videoRef.current) videoRef.current.srcObject = stream;
-      })
-      .catch(() => {
-        if (active) {
-          setCameraError(
-            isHindi
-              ? "कैमरा शुरू नहीं हो सका। ब्राउज़र में camera permission दें और पेज HTTPS पर खोलें।"
-              : "Could not start the camera. Allow camera access in your browser and open this page over HTTPS.",
-          );
-        }
-      });
 
     return () => {
       active = false;
       streamRef.current?.getTracks().forEach((track) => track.stop());
       streamRef.current = null;
     };
-  }, [boothOpen, photo, isHindi, facingMode]);
+  }, [boothOpen, photo, facingMode]);
 
   const finishPhoto = (source: CanvasImageSource, width: number, height: number) => {
     const canvas = canvasRef.current;
@@ -240,6 +250,14 @@ function Home() {
 
   const enhancePhoto = async (scene = "photo", interaction = "selfie") => {
     if (!photo || aiBusy) return;
+    if (isPoliticianStopped(scene)) {
+      setAiError(
+        isHindi
+          ? "यह सेवा अभी एडमिन द्वारा अस्थायी रूप से रोकी गई है।"
+          : "This feature is temporarily stopped by administrator."
+      );
+      return;
+    }
     setAiBusy(true);
     setAiError(null);
     setLastAttempt({ scene, interaction });
@@ -328,28 +346,6 @@ function Home() {
           >
             {LangToggleLabel(lang)}
           </button>
-          <div className="flex rounded-full border border-border bg-overlay/50 p-0.5 text-xs" aria-label={t.deviceMode}>
-            <button
-              type="button"
-              onClick={() => setDeviceMode(false)}
-              aria-pressed={!boothMode}
-              className={`rounded-full px-3 py-1 transition-all ${
-                !boothMode ? "bg-primary text-primary-foreground font-semibold" : "text-muted-foreground hover:text-foreground"
-              }`}
-            >
-              📱 {t.personalMode}
-            </button>
-            <button
-              type="button"
-              onClick={() => setDeviceMode(true)}
-              aria-pressed={boothMode}
-              className={`rounded-full px-3 py-1 transition-all ${
-                boothMode ? "bg-primary text-primary-foreground font-semibold" : "text-muted-foreground hover:text-foreground"
-              }`}
-            >
-              🏢 {t.boothMode}
-            </button>
-          </div>
         </div>
       </header>
 
@@ -440,76 +436,55 @@ function Home() {
               <p className="mt-1.5 text-xs text-muted-foreground md:text-sm">{c.desc[lang]}</p>
             </div>
 
-            {/* Action Buttons: Booth Mode vs Phone Mode */}
+            {/* Action Buttons: Take Selfie & Upload Photo */}
             <div className="mt-2 flex flex-col gap-2 pt-3 border-t border-border/60">
-              <div className="grid grid-cols-2 gap-2">
-                {boothMode ? (
-                  <>
-                    <Link
-                      to="/experience/$scene"
-                      params={{ scene: c.id }}
-                      search={{
-                        mode: "booth" as const,
-                        ...(candidateId ? { candidate: candidateId } : {}),
-                      }}
-                      onClick={() =>
-                        localStorage.setItem("zuitar.deviceMode", "booth")
-                      }
-                      className="zt-btn-primary flex items-center justify-center gap-1.5 py-3 text-xs sm:text-sm font-bold text-center shadow-lg"
-                    >
-                      <span>🤳</span>
-                      <span>{isHindi ? "लाइव सेल्फ़ी लें" : "Take Live Selfie"}</span>
-                    </Link>
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
+                <button
+                  type="button"
+                  disabled={isPoliticianStopped(c.id)}
+                  onClick={() => {
+                    setSelectedModalScene(c.id as "modi" | "yogi" | "bjp");
+                    setBoothOpen(true);
+                    setPhoto(null);
+                    setAiPhoto(null);
+                    setShowAi(false);
+                    setCameraError(null);
+                  }}
+                  className={`zt-btn-primary flex items-center justify-center gap-1.5 py-3 text-xs sm:text-sm font-bold text-center shadow-lg transition-all ${
+                    isPoliticianStopped(c.id) ? "opacity-50 cursor-not-allowed bg-muted text-muted-foreground" : ""
+                  }`}
+                >
+                  <span>🤳</span>
+                  <span>
+                    {isPoliticianStopped(c.id)
+                      ? (isHindi ? "अस्थायी रूप से बंद" : "Temporarily Paused")
+                      : (isHindi ? "सेल्फ़ी लें" : "Take Selfie")}
+                  </span>
+                </button>
 
-                    <button
-                      type="button"
-                      onClick={() => {
+                <label
+                  className={`zt-btn-secondary flex items-center justify-center gap-1.5 py-3 text-xs sm:text-sm font-bold cursor-pointer text-center shadow-md border border-amber-500/40 transition-all ${
+                    isPoliticianStopped(c.id) ? "opacity-50 cursor-not-allowed pointer-events-none" : ""
+                  }`}
+                >
+                  <span>📁</span>
+                  <span>{isHindi ? "फोटो अपलोड" : "Upload Photo"}</span>
+                  <input
+                    type="file"
+                    accept="image/*"
+                    disabled={isPoliticianStopped(c.id)}
+                    className="sr-only"
+                    onChange={(event) => {
+                      const file = event.currentTarget.files?.[0];
+                      if (file) {
                         setSelectedModalScene(c.id as "modi" | "yogi" | "bjp");
                         setBoothOpen(true);
-                      }}
-                      className="zt-btn-secondary flex items-center justify-center gap-1.5 py-3 text-xs sm:text-sm font-bold text-center shadow-md border border-amber-500/40"
-                    >
-                      <span>✨</span>
-                      <span>{isHindi ? "AI फोटो बनाएं" : "AI Photo Studio"}</span>
-                    </button>
-                  </>
-                ) : (
-                  <>
-                    <Link
-                      to="/experience/$scene"
-                      params={{ scene: c.id }}
-                      search={{
-                        ...(candidateId ? { candidate: candidateId } : {}),
-                      }}
-                      onClick={() =>
-                        localStorage.setItem("zuitar.deviceMode", "personal")
+                        void choosePhoto(file);
                       }
-                      className="zt-btn-primary flex items-center justify-center gap-1.5 py-3 text-xs sm:text-sm font-bold text-center shadow-lg"
-                    >
-                      <span>🤳</span>
-                      <span>{isHindi ? "लाइव सेल्फ़ी" : "Live Selfie"}</span>
-                    </Link>
-
-                    <label className="zt-btn-secondary flex items-center justify-center gap-1.5 py-3 text-xs sm:text-sm font-bold cursor-pointer text-center shadow-md border border-amber-500/40">
-                      <span>📁</span>
-                      <span>{isHindi ? "फोटो अपलोड" : "Upload Photo"}</span>
-                      <input
-                        type="file"
-                        accept="image/*"
-                        className="sr-only"
-                        onChange={(event) => {
-                          const file = event.currentTarget.files?.[0];
-                          if (file) {
-                            setSelectedModalScene(c.id as "modi" | "yogi" | "bjp");
-                            setBoothOpen(true);
-                            void choosePhoto(file);
-                          }
-                          event.currentTarget.value = "";
-                        }}
-                      />
-                    </label>
-                  </>
-                )}
+                      event.currentTarget.value = "";
+                    }}
+                  />
+                </label>
               </div>
             </div>
           </div>
@@ -536,7 +511,7 @@ function Home() {
               }}
               className="zt-btn-primary"
             >
-              {isHindi ? "कैमरा खोलें" : "Open camera"}
+              {isHindi ? "सेल्फ़ी लें / कैमरा खोलें" : "Take Selfie / Open Camera"}
             </button>
             <label className="zt-btn-ghost cursor-pointer border border-border">
               {isHindi ? "फोटो अपलोड करें" : "Upload photo"}
@@ -600,7 +575,7 @@ function Home() {
               </button>
             </div>
 
-            <div className="mt-5 flex min-h-64 flex-1 items-center justify-center overflow-hidden rounded-2xl bg-black">
+            <div className="mt-5 flex min-h-64 flex-1 items-center justify-center overflow-hidden rounded-2xl bg-black/95 border border-border/40">
               {photo ? (
                 <div className="relative flex h-full w-full items-center justify-center">
                   <img
@@ -609,23 +584,19 @@ function Home() {
                     className="max-h-[65vh] w-full object-contain"
                   />
                   {showAi && (
-                    <span className="absolute left-3 top-3 rounded-full bg-warning px-3 py-1 text-xs font-bold text-background">
+                    <span className="absolute left-3 top-3 rounded-full bg-warning px-3 py-1 text-xs font-bold text-background shadow">
                       {isHindi ? "AI से बना" : "AI GENERATED"}
                     </span>
                   )}
                   {aiBusy && (
-                    <div className="absolute inset-0 flex items-center justify-center bg-black/40">
-                      <span className="rounded-xl bg-overlay px-5 py-3">
-                        {isHindi ? "AI photo बना रहा है…" : "Enhancing with AI…"}
+                    <div className="absolute inset-0 flex items-center justify-center bg-black/50 backdrop-blur-xs">
+                      <span className="rounded-xl bg-overlay px-5 py-3 font-semibold text-primary shadow-lg border border-primary/30">
+                        {isHindi ? "AI फोटो तैयार कर रहा है…" : "Enhancing with AI…"}
                       </span>
                     </div>
                   )}
                 </div>
-              ) : cameraError ? (
-                <p role="alert" className="max-w-md p-6 text-center text-sm text-white">
-                  {cameraError}
-                </p>
-              ) : (
+              ) : cameraReady ? (
                 <video
                   ref={videoRef}
                   autoPlay
@@ -634,6 +605,51 @@ function Home() {
                   onLoadedMetadata={() => setCameraReady(true)}
                   className="max-h-[65vh] w-full object-contain"
                 />
+              ) : (
+                <div className="flex flex-col items-center justify-center p-8 text-center text-white space-y-4 max-w-sm">
+                  <div className="h-16 w-16 rounded-full bg-primary/20 flex items-center justify-center text-3xl border border-primary/40 shadow-inner">
+                    🤳
+                  </div>
+                  <div className="space-y-1.5">
+                    <h3 className="text-lg font-bold">
+                      {isHindi ? "सेल्फ़ी लें या फ़ोटो चुनें" : "Take Selfie or Upload"}
+                    </h3>
+                    <p className="text-xs text-white/70">
+                      {isHindi
+                        ? "अपने फ़ोन के कैमरे से नई सेल्फ़ी लें या गैलरी से अपनी मनपसंद फ़ोटो चुनें।"
+                        : "Take a fresh selfie with your camera or select a photo from your gallery."}
+                    </p>
+                  </div>
+                  <div className="flex flex-col gap-2.5 w-full pt-1">
+                    <label className="zt-btn-primary flex items-center justify-center gap-2 py-3 px-5 text-sm font-bold shadow-lg cursor-pointer w-full text-center">
+                      <span>📸</span>
+                      <span>{isHindi ? "कैमरा से सेल्फ़ी लें" : "Take Photo with Camera"}</span>
+                      <input
+                        type="file"
+                        accept="image/*"
+                        capture="user"
+                        className="sr-only"
+                        onChange={(event) => {
+                          void choosePhoto(event.currentTarget.files?.[0]);
+                          event.currentTarget.value = "";
+                        }}
+                      />
+                    </label>
+                    <label className="zt-btn-secondary flex items-center justify-center gap-2 py-2.5 px-4 text-xs font-semibold border border-white/20 cursor-pointer w-full text-center">
+                      <span>📁</span>
+                      <span>{isHindi ? "गैलरी से फ़ोटो चुनें" : "Choose from Gallery"}</span>
+                      <input
+                        type="file"
+                        accept="image/*"
+                        className="sr-only"
+                        onChange={(event) => {
+                          void choosePhoto(event.currentTarget.files?.[0]);
+                          event.currentTarget.value = "";
+                        }}
+                      />
+                    </label>
+                  </div>
+                </div>
               )}
             </div>
             <canvas ref={canvasRef} className="hidden" />
@@ -940,17 +956,28 @@ function Home() {
                         )}
                       </div>
 
+                      {/* Politician Stopped Banner */}
+                      {isPoliticianStopped(selectedModalScene) && (
+                        <div className="rounded-xl border border-destructive/40 bg-destructive/10 p-3 text-center text-xs font-semibold text-destructive">
+                          ⚠️ {isHindi
+                            ? "एडमिन द्वारा इस विकल्प के साथ फोटो जेनरेशन अभी अस्थायी रूप से बंद की गई है।"
+                            : "Photo generation for this option is temporarily paused by administrator."}
+                        </div>
+                      )}
+
                       {/* Primary Generate Button */}
                       <button
                         type="button"
                         onClick={() => void enhancePhoto(selectedModalScene, selectedModalInteraction)}
-                        disabled={aiBusy}
-                        className="zt-btn-primary mt-1 py-3 text-base font-bold flex items-center justify-center gap-2 w-full shadow-lg"
+                        disabled={aiBusy || isPoliticianStopped(selectedModalScene)}
+                        className="zt-btn-primary mt-1 py-3 text-base font-bold flex items-center justify-center gap-2 w-full shadow-lg disabled:opacity-50 disabled:cursor-not-allowed"
                       >
                         <span>✦</span>
                         <span>
                           {aiBusy
                             ? (isHindi ? "AI फोटो तैयार कर रहा है…" : "Generating AI Photo…")
+                            : isPoliticianStopped(selectedModalScene)
+                            ? (isHindi ? "अस्थायी रूप से बंद" : "Temporarily Paused")
                             : (isHindi ? "AI फ़ोटो बनाएँ (Generate)" : "Generate AI Photo ✦")}
                         </span>
                       </button>
@@ -968,27 +995,50 @@ function Home() {
                   </>
                 )
               ) : (
-                <>
-                  <button
-                    onClick={capturePhoto}
-                    disabled={!cameraReady || !!cameraError}
-                    className="zt-btn-primary disabled:cursor-not-allowed disabled:opacity-50"
-                  >
-                    {isHindi ? "फोटो लें" : "Capture photo"}
-                  </button>
-                  {canFlipCamera && cameraReady && !cameraError && (
-                    <button
-                      onClick={() => {
-                        setCameraReady(false);
-                        setFacingMode((mode) => (mode === "user" ? "environment" : "user"));
+                <div className="flex flex-wrap items-center justify-center gap-2.5 w-full">
+                  {cameraReady ? (
+                    <>
+                      <button
+                        type="button"
+                        onClick={capturePhoto}
+                        className="zt-btn-primary flex items-center gap-1.5 py-2.5 px-5 text-sm font-bold shadow-md"
+                      >
+                        <span>🔴</span>
+                        <span>{isHindi ? "फोटो खींचें" : "Capture photo"}</span>
+                      </button>
+                      {canFlipCamera && (
+                        <button
+                          type="button"
+                          onClick={() => {
+                            setCameraReady(false);
+                            setFacingMode((mode) => (mode === "user" ? "environment" : "user"));
+                          }}
+                          className="zt-btn-ghost text-xs"
+                        >
+                          🔄 {isHindi ? "कैमरा बदलें" : "Flip camera"}
+                        </button>
+                      )}
+                    </>
+                  ) : null}
+
+                  <label className="zt-btn-primary flex items-center justify-center gap-1.5 py-2.5 px-4 text-xs sm:text-sm font-bold cursor-pointer shadow-md">
+                    <span>📸</span>
+                    <span>{isHindi ? "कैमरा से लें" : "Take with Camera"}</span>
+                    <input
+                      type="file"
+                      accept="image/*"
+                      capture="user"
+                      className="sr-only"
+                      onChange={(event) => {
+                        void choosePhoto(event.currentTarget.files?.[0]);
+                        event.currentTarget.value = "";
                       }}
-                      className="zt-btn-ghost"
-                    >
-                      {isHindi ? "कैमरा बदलें" : "Flip camera"}
-                    </button>
-                  )}
-                  <label className="zt-btn-ghost cursor-pointer">
-                    {isHindi ? "फोटो चुनें" : "Choose photo"}
+                    />
+                  </label>
+
+                  <label className="zt-btn-secondary flex items-center justify-center gap-1.5 py-2.5 px-4 text-xs sm:text-sm font-semibold cursor-pointer border border-border">
+                    <span>📁</span>
+                    <span>{isHindi ? "गैलरी से चुनें" : "Choose photo"}</span>
                     <input
                       type="file"
                       accept="image/*"
@@ -999,7 +1049,7 @@ function Home() {
                       }}
                     />
                   </label>
-                </>
+                </div>
               )}
             </div>
             {photo && (
