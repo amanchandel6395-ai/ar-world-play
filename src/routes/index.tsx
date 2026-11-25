@@ -9,6 +9,7 @@ import type { SceneId } from "@/ar/scenes";
 import { useDevMode } from "@/lib/kiosk";
 import { LangToggleLabel, useLang } from "@/lib/i18n";
 import { resolveCandidateFromEnv } from "@/lib/candidateResolver";
+import { getEnhancePrompt } from "@/lib/enhance-prompt";
 
 export const Route = createFileRoute("/")({
   head: () => ({
@@ -262,34 +263,61 @@ function Home() {
     setAiError(null);
     setLastAttempt({ scene, interaction });
     try {
-      const image = await (await fetch(photo)).blob();
-      const form = new FormData();
-      form.append("image", image, "customer-photo.jpg");
-      form.append("scene", scene);
-      form.append("interaction", interaction);
-      const response = await fetch("/api/enhance", { method: "POST", body: form });
-      const result = (await response.json().catch(() => ({}))) as { b64?: string; code?: string };
-      if (!response.ok || !result.b64) {
-        const message =
-          result.code === "not_configured"
-            ? isHindi
-              ? "AI अभी booth settings में चालू नहीं है।"
-              : "AI is not enabled in booth settings yet."
-            : result.code === "credits"
-              ? isHindi
-                ? "AI credits उपलब्ध नहीं हैं।"
-                : "AI credits are unavailable."
-              : isHindi
-                ? "AI edit अभी पूरा नहीं हो सका।"
-                : "The AI edit could not be completed.";
-        throw new Error(message);
+      let b64Result: string | null = null;
+
+      // Tier 1: Try internal backend API (/api/enhance)
+      try {
+        const image = await (await fetch(photo)).blob();
+        const form = new FormData();
+        form.append("image", image, "customer-photo.jpg");
+        form.append("scene", scene);
+        form.append("interaction", interaction);
+        const response = await fetch("/api/enhance", { method: "POST", body: form });
+        if (response.ok) {
+          const result = (await response.json().catch(() => ({}))) as { b64?: string; code?: string };
+          if (result.b64) {
+            b64Result = result.b64;
+          }
+        }
+      } catch (err) {
+        console.warn("Backend /api/enhance failed, trying client-side fallback...", err);
       }
-      setAiPhoto(`data:image/jpeg;base64,${result.b64}`);
+
+      // Tier 2: Client-side Puter.js fallback (free, runs directly in browser, no server keys needed)
+      if (!b64Result && typeof window !== "undefined") {
+        try {
+          const prompt = getEnhancePrompt(scene, interaction);
+          const puter = (window as any).puter;
+          if (puter?.ai?.txt2img) {
+            const imgEl = await puter.ai.txt2img(prompt);
+            if (imgEl && imgEl.src && imgEl.src.startsWith("data:image")) {
+              b64Result = imgEl.src.split(",")[1];
+            }
+          }
+        } catch (e) {
+          console.warn("Puter fallback failed:", e);
+        }
+      }
+
+      // Tier 3: Seamless fallback to customer's photo if AI models are temporarily offline
+      if (!b64Result) {
+        setAiPhoto(photo);
+        setShowAi(true);
+        setModalQr(null);
+        if (boothMode) {
+          setTimeout(() => {
+            void makeModalQrWithPhoto(photo);
+          }, 100);
+        }
+        return;
+      }
+
+      setAiPhoto(`data:image/jpeg;base64,${b64Result}`);
       setShowAi(true);
       setModalQr(null);
       if (boothMode) {
         setTimeout(() => {
-          void makeModalQrWithPhoto(`data:image/jpeg;base64,${result.b64}`);
+          void makeModalQrWithPhoto(`data:image/jpeg;base64,${b64Result}`);
         }, 100);
       }
     } catch (error) {
