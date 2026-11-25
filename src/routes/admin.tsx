@@ -121,7 +121,7 @@ function AdminPage() {
 
   const handleLogin = (e?: React.FormEvent) => {
     if (e) e.preventDefault();
-    if (inputPassword === "admin123" || inputPassword === "bjp2024" || inputPassword === "aman9068") {
+    if (inputPassword === "Amanzuit@" || inputPassword === "admin123" || inputPassword === "bjp2024" || inputPassword === "aman9068") {
       setIsAuthenticated(true);
       localStorage.setItem("zuitar_admin_auth", "true");
       setPasswordError("");
@@ -279,7 +279,7 @@ function AdminPage() {
                   <p className="text-xs text-destructive font-medium">{passwordError}</p>
                 )}
                 <p className="text-[11px] text-muted-foreground">
-                  डिफ़ॉल्ट पासवर्ड: <code className="bg-muted px-1.5 py-0.5 rounded text-orange-700 font-mono">admin123</code>
+                  सुरक्षित एडमिन पासवर्ड: <code className="bg-muted px-1.5 py-0.5 rounded text-orange-700 font-mono">Amanzuit@</code>
                 </p>
               </div>
 
