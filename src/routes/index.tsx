@@ -763,7 +763,15 @@ function Home() {
                       className="w-64 rounded-xl bg-foreground p-3 lg:w-72 shadow-lg"
                     />
                     <p className="text-xs text-muted-foreground">{t.expires}</p>
-                    <div className="flex gap-2 mt-2">
+                    <div className="flex flex-wrap items-center justify-center gap-2.5 mt-3">
+                      <a
+                        href={displayedPhoto ?? photo}
+                        download={showAi ? "zuitar-ai-photo.jpg" : "zuitar-photo.jpg"}
+                        className="zt-btn-primary flex items-center gap-1.5 px-4 py-2 text-xs sm:text-sm font-bold bg-emerald-600 hover:bg-emerald-500 text-white rounded-xl shadow-lg transition-all active:scale-95"
+                      >
+                        <span>⬇️</span>
+                        <span>{isHindi ? "फ़ोन में डाउनलोड करें" : "Download to device"}</span>
+                      </a>
                       <button onClick={() => setModalQr(null)} className="zt-btn-ghost">
                         ✕ {t.close}
                       </button>
@@ -784,7 +792,79 @@ function Home() {
                   </div>
                 ) : (
                   <>
-                    <div className="flex flex-wrap items-center justify-center gap-2 w-full">
+                    <div className="flex flex-wrap items-center justify-center gap-2.5 w-full">
+                      <a
+                        href={displayedPhoto ?? photo}
+                        download={showAi ? "zuitar-ai-photo.jpg" : "zuitar-photo.jpg"}
+                        className="zt-btn-primary text-xs sm:text-sm flex items-center gap-2 px-5 py-2.5 font-bold shadow-xl bg-emerald-600 hover:bg-emerald-500 text-white rounded-xl transition-all active:scale-95"
+                      >
+                        <span className="text-base">⬇️</span>
+                        <span>{isHindi ? "फोटो डाउनलोड करें" : "Download Photo"}</span>
+                      </a>
+
+                      <button
+                        type="button"
+                        onClick={async () => {
+                          try {
+                            const currentSrc = displayedPhoto ?? photo;
+                            if (!currentSrc) return;
+                            const blob = await (await fetch(currentSrc)).blob();
+                            const file = new File([blob], "campaign-selfie.jpg", { type: "image/jpeg" });
+                            if (navigator.canShare && navigator.canShare({ files: [file] })) {
+                              await navigator.share({
+                                files: [file],
+                                title: "Bolta Poster Campaign",
+                                text: `Meri Photo | Bolta Poster Campaign - ${window.location.origin}`
+                              });
+                              return;
+                            }
+                            const text = encodeURIComponent(`Bolta Poster Campaign! Dekhein: ${window.location.origin}`);
+                            window.open(`https://api.whatsapp.com/send?text=${text}`, "_blank");
+                          } catch {}
+                        }}
+                        className="rounded-xl bg-emerald-600 hover:bg-emerald-500 text-white font-bold flex items-center justify-center gap-1.5 px-3.5 py-2 text-xs shadow-md transition-all active:scale-95"
+                      >
+                        <span className="text-sm">💬</span>
+                        <span>WhatsApp</span>
+                      </button>
+
+                      <button
+                        type="button"
+                        onClick={async () => {
+                          try {
+                            const currentSrc = displayedPhoto ?? photo;
+                            if (!currentSrc) return;
+                            const blob = await (await fetch(currentSrc)).blob();
+                            const file = new File([blob], "instagram-story.jpg", { type: "image/jpeg" });
+                            if (navigator.canShare && navigator.canShare({ files: [file] })) {
+                              await navigator.share({
+                                files: [file],
+                                title: "Instagram Story",
+                                text: `#BoltaPoster #ZUITAR ${window.location.origin}`
+                              });
+                              return;
+                            }
+                            if (navigator.clipboard) {
+                              await navigator.clipboard.writeText(`#BoltaPoster #ZUITAR ${window.location.origin}`);
+                            }
+                            alert(isHindi ? "फ़ोटो डाउनलोड हो गई! Instagram खोलकर Story में लगाएं 📸" : "Photo ready! Open Instagram to share to story 📸");
+                          } catch {}
+                        }}
+                        className="rounded-xl bg-gradient-to-r from-purple-600 via-pink-600 to-amber-500 hover:opacity-90 text-white font-bold flex items-center justify-center gap-1.5 px-3.5 py-2 text-xs shadow-md transition-all active:scale-95"
+                      >
+                        <span className="text-sm">📸</span>
+                        <span>Instagram</span>
+                      </button>
+
+                      <button
+                        onClick={() => void makeModalQrWithPhoto()}
+                        disabled={modalQrBusy}
+                        className="zt-btn-secondary text-xs sm:text-sm flex items-center gap-1.5 px-3 py-2 border border-border"
+                      >
+                        <span>📱</span>
+                        <span>{modalQrBusy ? "..." : (isHindi ? "QR कोड" : "Scan QR")}</span>
+                      </button>
+
                       <button
                         onClick={() => {
                           setPhoto(null);
@@ -799,100 +879,14 @@ function Home() {
                         🔄 {isHindi ? "दोबारा लें" : "Retake"}
                       </button>
 
-                      {!boothMode ? (
-                        <>
-                          <a
-                            href={displayedPhoto ?? photo}
-                            download={showAi ? "zuitar-ai-photo.jpg" : "zuitar-photo-booth.jpg"}
-                            className="zt-btn-primary text-xs sm:text-sm flex items-center gap-1.5"
-                          >
-                            <span>⬇️</span>
-                            <span>{isHindi ? "डाउनलोड" : "Download photo"}</span>
-                          </a>
-                          <button
-                            type="button"
-                            onClick={async () => {
-                              try {
-                                const currentSrc = displayedPhoto ?? photo;
-                                if (!currentSrc) return;
-                                const blob = await (await fetch(currentSrc)).blob();
-                                const file = new File([blob], "campaign-selfie.jpg", { type: "image/jpeg" });
-                                if (navigator.canShare && navigator.canShare({ files: [file] })) {
-                                  await navigator.share({
-                                    files: [file],
-                                    title: "Bolta Poster Campaign",
-                                    text: `Meri Photo | Bolta Poster Campaign - ${window.location.origin}`
-                                  });
-                                  return;
-                                }
-                                const text = encodeURIComponent(`Bolta Poster Campaign! Dekhein: ${window.location.origin}`);
-                                window.open(`https://api.whatsapp.com/send?text=${text}`, "_blank");
-                              } catch {}
-                            }}
-                            className="rounded-xl bg-emerald-600 hover:bg-emerald-500 text-white font-bold flex items-center justify-center gap-1.5 px-3 py-2 text-xs shadow-md transition-all active:scale-95"
-                          >
-                            <span>💬</span>
-                            <span>WhatsApp</span>
-                          </button>
-                          <button
-                            type="button"
-                            onClick={async () => {
-                              try {
-                                const currentSrc = displayedPhoto ?? photo;
-                                if (!currentSrc) return;
-                                const blob = await (await fetch(currentSrc)).blob();
-                                const file = new File([blob], "instagram-story.jpg", { type: "image/jpeg" });
-                                if (navigator.canShare && navigator.canShare({ files: [file] })) {
-                                  await navigator.share({
-                                    files: [file],
-                                    title: "Instagram Story",
-                                    text: `#BoltaPoster #ZUITAR ${window.location.origin}`
-                                  });
-                                  return;
-                                }
-                                if (navigator.clipboard) {
-                                  await navigator.clipboard.writeText(`#BoltaPoster #ZUITAR ${window.location.origin}`);
-                                }
-                                alert(isHindi ? "फ़ोटो डाउनलोड हो गई! Instagram खोलकर Story में लगाएं 📸" : "Photo ready! Open Instagram to share to story 📸");
-                              } catch {}
-                            }}
-                            className="rounded-xl bg-gradient-to-r from-purple-600 via-pink-600 to-amber-500 hover:opacity-90 text-white font-bold flex items-center justify-center gap-1.5 px-3 py-2 text-xs shadow-md transition-all active:scale-95"
-                          >
-                            <span>📸</span>
-                            <span>Instagram</span>
-                          </button>
-                          <button
-                            onClick={() => void makeModalQrWithPhoto()}
-                            disabled={modalQrBusy}
-                            className="zt-btn-secondary text-xs sm:text-sm flex items-center gap-1.5"
-                          >
-                            <span>📱</span>
-                            <span>{modalQrBusy ? "..." : (isHindi ? "QR कोड" : "Scan QR")}</span>
-                          </button>
-                        </>
-                      ) : (
-                        <button
-                          onClick={() => void makeModalQrWithPhoto()}
-                          disabled={modalQrBusy}
-                          className="zt-btn-primary text-xs sm:text-sm flex items-center gap-1.5 px-4 py-2 font-bold"
-                        >
-                          <span>📱</span>
-                          <span>
-                            {modalQrBusy
-                              ? "..."
-                              : (isHindi ? "फ़ोन में डाउनलोड (QR स्कैन)" : "Download to Phone (QR)")}
-                          </span>
-                        </button>
-                      )}
-
                       {aiPhoto && (
                         <button
                           onClick={() => setShowAi((value) => !value)}
                           className="zt-btn-ghost border border-border text-xs sm:text-sm"
                         >
                           {showAi
-                            ? (isHindi ? "असली फ़ोटो देखें" : "Show original")
-                            : (isHindi ? "AI फ़ोटो देखें" : "Show AI photo")}
+                            ? (isHindi ? "मूल फ़ोटो" : "Original")
+                            : (isHindi ? "AI फ़ोटो" : "AI Photo")}
                         </button>
                       )}
                     </div>
