@@ -124,8 +124,10 @@ function Home() {
   );
   const [cameraError, setCameraError] = useState<string | null>(null);
   const [cameraReady, setCameraReady] = useState(false);
+  const [cameraFailed, setCameraFailed] = useState(false);
+  const [countdown, setCountdown] = useState<number | null>(null);
   const [facingMode, setFacingMode] = useState<"user" | "environment">("user");
-  const [canFlipCamera, setCanFlipCamera] = useState(false);
+  const [canFlipCamera, setCanFlipCamera] = useState(true);
   const videoRef = useRef<HTMLVideoElement | null>(null);
   const canvasRef = useRef<HTMLCanvasElement | null>(null);
   const streamRef = useRef<MediaStream | null>(null);
@@ -160,12 +162,19 @@ function Home() {
     if (!boothOpen || photo) return;
     let active = true;
     setCameraReady(false);
+    setCameraFailed(false);
     setCameraError(null);
 
-    // Try starting webcam preview if available, but never block or error if unavailable
     if (navigator.mediaDevices?.getUserMedia) {
       navigator.mediaDevices
-        .getUserMedia({ video: { facingMode }, audio: false })
+        .getUserMedia({
+          video: {
+            facingMode,
+            width: { ideal: 1920 },
+            height: { ideal: 1080 },
+          },
+          audio: false,
+        })
         .then((stream) => {
           if (!active) {
             stream.getTracks().forEach((track) => track.stop());
@@ -174,14 +183,18 @@ function Home() {
           streamRef.current = stream;
           if (videoRef.current) {
             videoRef.current.srcObject = stream;
-            setCameraReady(true);
+            videoRef.current.play().catch(() => {});
           }
+          setCameraReady(true);
+          setCameraFailed(false);
         })
-        .catch(() => {
-          // Gracefully fallback to native device camera / photo picker without showing any error
+        .catch((err) => {
+          console.warn("Camera access failed or unavailable, fallback active:", err);
           setCameraReady(false);
-          setCameraError(null);
+          setCameraFailed(true);
         });
+    } else {
+      setCameraFailed(true);
     }
 
     return () => {
@@ -190,6 +203,27 @@ function Home() {
       streamRef.current = null;
     };
   }, [boothOpen, photo, facingMode]);
+
+  const toggleCameraFlip = () => {
+    setCameraReady(false);
+    setFacingMode((prev) => (prev === "user" ? "environment" : "user"));
+  };
+
+  const startCountdownAndCapture = () => {
+    if (countdown !== null) return;
+    setCountdown(3);
+    let count = 3;
+    const interval = setInterval(() => {
+      count -= 1;
+      if (count <= 0) {
+        clearInterval(interval);
+        setCountdown(null);
+        capturePhoto();
+      } else {
+        setCountdown(count);
+      }
+    }, 1000);
+  };
 
   const finishPhoto = (source: CanvasImageSource, width: number, height: number) => {
     const canvas = canvasRef.current;
@@ -201,7 +235,15 @@ function Home() {
     const context = canvas.getContext("2d");
     if (!context) return;
 
+    context.save();
+    // Mirror the capture if taken from front user camera so result matches preview
+    if (source === videoRef.current && facingMode === "user") {
+      context.translate(canvas.width, 0);
+      context.scale(-1, 1);
+    }
     context.drawImage(source, 0, 0, canvas.width, canvas.height);
+    context.restore();
+
     const footerHeight = Math.max(62, Math.round(canvas.width * 0.12));
     context.fillStyle = "#111827";
     context.fillRect(0, canvas.height - footerHeight, canvas.width, footerHeight);
@@ -575,7 +617,7 @@ function Home() {
               </button>
             </div>
 
-            <div className="mt-5 flex min-h-64 flex-1 items-center justify-center overflow-hidden rounded-2xl bg-black/95 border border-border/40">
+            <div className="mt-5 flex min-h-72 flex-1 items-center justify-center overflow-hidden rounded-2xl bg-black border border-border/40 relative">
               {photo ? (
                 <div className="relative flex h-full w-full items-center justify-center">
                   <img
@@ -596,59 +638,107 @@ function Home() {
                     </div>
                   )}
                 </div>
-              ) : cameraReady ? (
-                <video
-                  ref={videoRef}
-                  autoPlay
-                  playsInline
-                  muted
-                  onLoadedMetadata={() => setCameraReady(true)}
-                  className="max-h-[65vh] w-full object-contain"
-                />
               ) : (
-                <div className="flex flex-col items-center justify-center p-8 text-center text-white space-y-4 max-w-sm">
-                  <div className="h-16 w-16 rounded-full bg-primary/20 flex items-center justify-center text-3xl border border-primary/40 shadow-inner">
-                    🤳
-                  </div>
-                  <div className="space-y-1.5">
-                    <h3 className="text-lg font-bold">
-                      {isHindi ? "सेल्फ़ी लें या फ़ोटो चुनें" : "Take Selfie or Upload"}
-                    </h3>
-                    <p className="text-xs text-white/70">
-                      {isHindi
-                        ? "अपने फ़ोन के कैमरे से नई सेल्फ़ी लें या गैलरी से अपनी मनपसंद फ़ोटो चुनें।"
-                        : "Take a fresh selfie with your camera or select a photo from your gallery."}
-                    </p>
-                  </div>
-                  <div className="flex flex-col gap-2.5 w-full pt-1">
-                    <label className="zt-btn-primary flex items-center justify-center gap-2 py-3 px-5 text-sm font-bold shadow-lg cursor-pointer w-full text-center">
-                      <span>📸</span>
-                      <span>{isHindi ? "कैमरा से सेल्फ़ी लें" : "Take Photo with Camera"}</span>
-                      <input
-                        type="file"
-                        accept="image/*"
-                        capture="user"
-                        className="sr-only"
-                        onChange={(event) => {
-                          void choosePhoto(event.currentTarget.files?.[0]);
-                          event.currentTarget.value = "";
-                        }}
-                      />
-                    </label>
-                    <label className="zt-btn-secondary flex items-center justify-center gap-2 py-2.5 px-4 text-xs font-semibold border border-white/20 cursor-pointer w-full text-center">
-                      <span>📁</span>
-                      <span>{isHindi ? "गैलरी से फ़ोटो चुनें" : "Choose from Gallery"}</span>
-                      <input
-                        type="file"
-                        accept="image/*"
-                        className="sr-only"
-                        onChange={(event) => {
-                          void choosePhoto(event.currentTarget.files?.[0]);
-                          event.currentTarget.value = "";
-                        }}
-                      />
-                    </label>
-                  </div>
+                <div className="relative flex h-full min-h-[340px] w-full items-center justify-center bg-black overflow-hidden">
+                  <video
+                    ref={videoRef}
+                    autoPlay
+                    playsInline
+                    muted
+                    onLoadedMetadata={() => {
+                      videoRef.current?.play().catch(() => {});
+                      setCameraReady(true);
+                      setCameraFailed(false);
+                    }}
+                    className={`max-h-[65vh] w-full object-contain transition-transform duration-200 ${
+                      facingMode === "user" ? "-scale-x-100" : ""
+                    } ${cameraReady ? "block" : "hidden"}`}
+                  />
+
+                  {/* Camera Starting / Loading indicator */}
+                  {!cameraReady && !cameraFailed && (
+                    <div className="flex flex-col items-center justify-center p-8 text-center text-white space-y-3">
+                      <div className="h-10 w-10 animate-spin rounded-full border-4 border-amber-500/30 border-t-amber-500" />
+                      <p className="text-sm font-semibold text-white/90">
+                        {isHindi ? "कैमरा शुरू हो रहा है…" : "Starting camera…"}
+                      </p>
+                    </div>
+                  )}
+
+                  {/* Fallback only if hardware camera access is unavailable */}
+                  {cameraFailed && (
+                    <div className="flex flex-col items-center justify-center p-8 text-center text-white space-y-4 max-w-sm">
+                      <div className="h-16 w-16 rounded-full bg-primary/20 flex items-center justify-center text-3xl border border-primary/40 shadow-inner">
+                        📸
+                      </div>
+                      <div className="space-y-1.5">
+                        <h3 className="text-lg font-bold">
+                          {isHindi ? "कैमरा एक्सेस नहीं मिला" : "Camera Access Unavailable"}
+                        </h3>
+                        <p className="text-xs text-white/70">
+                          {isHindi
+                            ? "सीधे कैमरे से सेल्फ़ी लेने के लिए नीचे बटन दबाएँ या गैलरी से फ़ोटो चुनें।"
+                            : "Use native camera capture or choose a photo from gallery."}
+                        </p>
+                      </div>
+                      <div className="flex flex-col gap-2.5 w-full pt-1">
+                        <label className="zt-btn-primary flex items-center justify-center gap-2 py-3 px-5 text-sm font-bold shadow-lg cursor-pointer w-full text-center">
+                          <span>📸</span>
+                          <span>{isHindi ? "कैमरा से सेल्फ़ी लें" : "Take Photo with Camera"}</span>
+                          <input
+                            type="file"
+                            accept="image/*"
+                            capture="user"
+                            className="sr-only"
+                            onChange={(event) => {
+                              void choosePhoto(event.currentTarget.files?.[0]);
+                              event.currentTarget.value = "";
+                            }}
+                          />
+                        </label>
+                        <label className="zt-btn-secondary flex items-center justify-center gap-2 py-2.5 px-4 text-xs font-semibold border border-white/20 cursor-pointer w-full text-center">
+                          <span>📁</span>
+                          <span>{isHindi ? "गैलरी से फ़ोटो चुनें" : "Choose from Gallery"}</span>
+                          <input
+                            type="file"
+                            accept="image/*"
+                            className="sr-only"
+                            onChange={(event) => {
+                              void choosePhoto(event.currentTarget.files?.[0]);
+                              event.currentTarget.value = "";
+                            }}
+                          />
+                        </label>
+                      </div>
+                    </div>
+                  )}
+
+                  {/* Controls overlaid directly on top of video when active */}
+                  {cameraReady && (
+                    <>
+                      {/* Top Bar: Flip Camera */}
+                      <div className="absolute top-3 right-3 z-20">
+                        <button
+                          type="button"
+                          onClick={toggleCameraFlip}
+                          aria-label={isHindi ? "कैमरा बदलें" : "Flip camera"}
+                          className="flex items-center gap-1.5 rounded-full bg-black/60 backdrop-blur-md border border-white/25 px-3 py-1.5 text-xs font-bold text-white shadow-xl hover:bg-black/80 active:scale-95 transition-all"
+                        >
+                          <span className="text-base">🔄</span>
+                          <span>{facingMode === "user" ? (isHindi ? "बैक कैमरा" : "Back Camera") : (isHindi ? "फ्रंट कैमरा" : "Front Camera")}</span>
+                        </button>
+                      </div>
+
+                      {/* Countdown Display */}
+                      {countdown !== null && (
+                        <div className="absolute inset-0 z-30 flex items-center justify-center bg-black/40 backdrop-blur-xs">
+                          <span className="text-8xl font-black text-amber-400 drop-shadow-[0_10px_20px_rgba(0,0,0,0.8)] animate-pulse">
+                            {countdown}
+                          </span>
+                        </div>
+                      )}
+                    </>
+                  )}
                 </div>
               )}
             </div>
@@ -995,50 +1085,58 @@ function Home() {
                   </>
                 )
               ) : (
-                <div className="flex flex-wrap items-center justify-center gap-2.5 w-full">
+                <div className="flex flex-wrap items-center justify-center gap-3 w-full">
                   {cameraReady ? (
                     <>
                       <button
                         type="button"
                         onClick={capturePhoto}
-                        className="zt-btn-primary flex items-center gap-1.5 py-2.5 px-5 text-sm font-bold shadow-md"
+                        disabled={countdown !== null}
+                        className="zt-btn-primary flex items-center gap-2 py-3 px-6 text-sm sm:text-base font-bold shadow-xl rounded-full bg-rose-600 hover:bg-rose-500 text-white transition-all active:scale-95"
                       >
-                        <span>🔴</span>
-                        <span>{isHindi ? "फोटो खींचें" : "Capture photo"}</span>
+                        <span className="text-lg">🔴</span>
+                        <span>{isHindi ? "फोटो खींचें" : "Capture Photo"}</span>
                       </button>
-                      {canFlipCamera && (
-                        <button
-                          type="button"
-                          onClick={() => {
-                            setCameraReady(false);
-                            setFacingMode((mode) => (mode === "user" ? "environment" : "user"));
-                          }}
-                          className="zt-btn-ghost text-xs"
-                        >
-                          🔄 {isHindi ? "कैमरा बदलें" : "Flip camera"}
-                        </button>
-                      )}
+
+                      <button
+                        type="button"
+                        onClick={startCountdownAndCapture}
+                        disabled={countdown !== null}
+                        className="zt-btn-secondary flex items-center gap-1.5 py-3 px-4 text-xs sm:text-sm font-semibold border border-amber-500/40 rounded-full transition-all"
+                      >
+                        <span>⏱️</span>
+                        <span>{isHindi ? "3s टाइमर" : "3s Timer"}</span>
+                      </button>
+
+                      <button
+                        type="button"
+                        onClick={toggleCameraFlip}
+                        className="zt-btn-ghost flex items-center gap-1.5 py-3 px-4 text-xs sm:text-sm font-semibold border border-border/80 rounded-full transition-all"
+                      >
+                        <span>🔄</span>
+                        <span>{isHindi ? "कैमरा बदलें" : "Flip"}</span>
+                      </button>
                     </>
-                  ) : null}
+                  ) : (
+                    <label className="zt-btn-primary flex items-center justify-center gap-2 py-3 px-6 text-sm font-bold cursor-pointer shadow-lg rounded-full">
+                      <span>📸</span>
+                      <span>{isHindi ? "कैमरा से सेल्फ़ी लें" : "Take with Camera"}</span>
+                      <input
+                        type="file"
+                        accept="image/*"
+                        capture="user"
+                        className="sr-only"
+                        onChange={(event) => {
+                          void choosePhoto(event.currentTarget.files?.[0]);
+                          event.currentTarget.value = "";
+                        }}
+                      />
+                    </label>
+                  )}
 
-                  <label className="zt-btn-primary flex items-center justify-center gap-1.5 py-2.5 px-4 text-xs sm:text-sm font-bold cursor-pointer shadow-md">
-                    <span>📸</span>
-                    <span>{isHindi ? "कैमरा से लें" : "Take with Camera"}</span>
-                    <input
-                      type="file"
-                      accept="image/*"
-                      capture="user"
-                      className="sr-only"
-                      onChange={(event) => {
-                        void choosePhoto(event.currentTarget.files?.[0]);
-                        event.currentTarget.value = "";
-                      }}
-                    />
-                  </label>
-
-                  <label className="zt-btn-secondary flex items-center justify-center gap-1.5 py-2.5 px-4 text-xs sm:text-sm font-semibold cursor-pointer border border-border">
+                  <label className="zt-btn-secondary flex items-center justify-center gap-1.5 py-3 px-5 text-xs sm:text-sm font-semibold cursor-pointer border border-border rounded-full">
                     <span>📁</span>
-                    <span>{isHindi ? "गैलरी से चुनें" : "Choose photo"}</span>
+                    <span>{isHindi ? "गैलरी से चुनें" : "Upload Photo"}</span>
                     <input
                       type="file"
                       accept="image/*"
