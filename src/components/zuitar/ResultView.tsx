@@ -6,7 +6,6 @@ import { KIOSK, useIdleReset } from "@/lib/kiosk";
 import type { SceneId } from "@/ar/scenes";
 import type { InteractionId, Candidate } from "@/lib/config";
 import { useLang } from "@/lib/i18n";
-import { getEnhancePrompt } from "@/lib/enhance-prompt";
 
 export const CAMPAIGN_SLOGANS = [
   "अबकी बार 400 पार, मोदी-योगी सरकार",
@@ -285,51 +284,24 @@ export function ResultView({
     setAiBusy(true);
     setMsg(null);
     try {
-      let b64: string | null = null;
-      let lastError: Error | null = null;
-
-      // 1. Try internal backend API (/api/enhance)
-      try {
-        const fd = new FormData();
-        fd.append("image", photo, "capture.jpg");
-        fd.append("scene", sceneId);
-        fd.append("interaction", targetIx);
-        const res = await fetch("/api/enhance", { method: "POST", body: fd });
-        if (res.ok) {
-          const j = (await res.json().catch(() => ({}))) as { b64?: string; error?: string };
-          if (j.b64) b64 = j.b64;
-          else if (j.error) lastError = new Error(j.error);
-        }
-      } catch (e) {
-        console.warn("Backend /api/enhance failed, trying client-side AI fallback...", e);
+      const fd = new FormData();
+      fd.append("image", photo, "capture.jpg");
+      fd.append("scene", sceneId);
+      fd.append("interaction", targetIx);
+      const res = await fetch("/api/enhance", { method: "POST", body: fd });
+      if (!res.ok) {
+        const j = (await res.json().catch(() => ({}))) as {
+          code?: string;
+          message?: string;
+        };
+        throw new Error(j.message || "The AI edit could not be completed.");
       }
-
-      // 2. Client-side Puter.js fallback
-      if (!b64 && typeof window !== "undefined") {
-        try {
-          const prompt = getEnhancePrompt(sceneId, targetIx);
-          const puter = (window as any).puter;
-          if (puter?.ai?.txt2img) {
-            const imgEl = await puter.ai.txt2img(prompt);
-            if (imgEl && imgEl.src && imgEl.src.startsWith("data:image")) {
-              b64 = imgEl.src.split(",")[1];
-            }
-          }
-        } catch (e) {
-          console.warn("Puter fallback failed:", e);
-        }
-      }
-
-      if (b64) {
-        const bin = atob(b64);
-        const arr = new Uint8Array(bin.length);
-        for (let i = 0; i < bin.length; i++) arr[i] = bin.charCodeAt(i);
-        setAiPhoto(new Blob([arr], { type: "image/jpeg" }));
-        setShowAi(true);
-        setQr(null);
-      } else {
-        throw lastError || new Error("The AI edit could not be completed.");
-      }
+      const { b64 } = (await res.json()) as { b64?: string };
+      if (!b64) throw new Error("The photo service returned no completed image.");
+      const bin = Uint8Array.from(atob(b64), (c) => c.charCodeAt(0));
+      setAiPhoto(new Blob([bin], { type: "image/jpeg" }));
+      setShowAi(true);
+      setQr(null);
     } catch (e) {
       console.error("AI image generation error:", e);
       setMsg(e instanceof Error && e.message ? e.message : "AI enhancement failed.");
