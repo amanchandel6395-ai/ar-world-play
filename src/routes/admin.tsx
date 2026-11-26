@@ -23,7 +23,7 @@ import {
   Unlock,
   KeyRound
 } from "lucide-react";
-import { useToast } from "@/hooks/use-toast";
+import { toast } from "sonner";
 
 export const Route = createFileRoute("/admin")({
   ssr: false,
@@ -46,8 +46,6 @@ interface Candidate {
 }
 
 function AdminPage() {
-  const { toast } = useToast();
-
   // Authentication State
   const [isAuthenticated, setIsAuthenticated] = useState<boolean>(() => {
     try {
@@ -125,16 +123,13 @@ function AdminPage() {
       setIsAuthenticated(true);
       localStorage.setItem("zuitar_admin_auth", "true");
       setPasswordError("");
-      toast({
-        title: "प्रवेश स्वीकृत (Logged In)",
-        description: "एडमिन पैनल में आपका स्वागत है।"
+      toast.success("प्रवेश स्वीकृत (Logged In)", {
+        description: "एडमिन पैनल में आपका स्वागत है।",
       });
     } else {
       setPasswordError("पासवर्ड गलत है! (कृपया सही पासवर्ड दर्ज करें)");
-      toast({
-        title: "गलत पासवर्ड",
+      toast.error("गलत पासवर्ड", {
         description: "कृपया सही एडमिन पासवर्ड दर्ज करें।",
-        variant: "destructive"
       });
     }
   };
@@ -142,28 +137,24 @@ function AdminPage() {
   const handleLogout = () => {
     setIsAuthenticated(false);
     localStorage.removeItem("zuitar_admin_auth");
-    toast({
-      title: "लॉगआउट हो गया",
-      description: "एडमिन सत्र समाप्त हो गया।"
+    toast.success("लॉगआउट हो गया", {
+      description: "एडमिन सत्र समाप्त हो गया।",
     });
   };
 
   const saveAll = () => {
     localStorage.setItem("zuitar_admin_candidates", JSON.stringify(candidates));
     localStorage.setItem("zuitar_admin_settings", JSON.stringify(settings));
-    toast({
-      title: "✅ सेटिंग्स सुरक्षित हो गईं!",
-      description: "प्रत्याशी और सभी बदलाव सफलतापूर्वक सेव कर लिए गए हैं।"
+    toast.success("✅ सेटिंग्स सुरक्षित हो गईं!", {
+      description: "प्रत्याशी और सभी बदलाव सफलतापूर्वक सेव कर लिए गए हैं।",
     });
   };
 
   const handleAddCandidate = (e: React.FormEvent) => {
     e.preventDefault();
     if (!newCandidate.name.trim()) {
-      toast({
-        title: "नाम दर्ज करें",
+      toast.error("नाम दर्ज करें", {
         description: "कृपया प्रत्याशी का नाम भरें।",
-        variant: "destructive"
       });
       return;
     }
@@ -193,9 +184,8 @@ function AdminPage() {
       photoUrl: ""
     });
 
-    toast({
-      title: "🎉 नया प्रत्याशी जोड़ा गया!",
-      description: `${created.name} के लिए पोस्टर व क्यूआर लिंक तैयार है।`
+    toast.success("🎉 नया प्रत्याशी जोड़ा गया!", {
+      description: `${created.name} के लिए पोस्टर व क्यूआर लिंक तैयार है।`,
     });
   };
 
@@ -203,9 +193,8 @@ function AdminPage() {
     const updated = candidates.filter(c => c.id !== id);
     setCandidates(updated);
     localStorage.setItem("zuitar_admin_candidates", JSON.stringify(updated));
-    toast({
-      title: "हटा दिया गया",
-      description: "प्रत्याशी सूची से हटा दिया गया है।"
+    toast.success("हटा दिया गया", {
+      description: "प्रत्याशी सूची से हटा दिया गया है।",
     });
   };
 
@@ -221,9 +210,8 @@ function AdminPage() {
     navigator.clipboard.writeText(url);
     setCopiedId(candidate.id);
     setTimeout(() => setCopiedId(null), 2500);
-    toast({
-      title: "📋 लिंक कॉपी हो गया!",
-      description: "यह लिंक व्हाट्सएप पर शेयर करें या क्यूआर कोड में डालें।"
+    toast.success("📋 लिंक कॉपी हो गया!", {
+      description: "यह लिंक व्हाट्सएप पर शेयर करें या क्यूआर कोड में डालें।",
     });
   };
 

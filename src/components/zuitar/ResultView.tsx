@@ -342,16 +342,20 @@ export function ResultView({
       if (!b64) {
         try {
           const photoUrl = URL.createObjectURL(photo);
+          const candidateName = candidate?.name[lang] || candidate?.name.hi;
+          const candidateConstituency =
+            candidate?.constituency[lang] || candidate?.constituency.hi;
           const compositeDataUrl = await createLeaderComposite(photoUrl, {
             scene: sceneId,
             interaction: targetIx,
-            slogan: selectedSlogan || undefined,
-            candidateName: candidate?.name[lang] || candidate?.name.hi,
-            candidateConstituency: candidate?.constituency[lang] || candidate?.constituency.hi,
+            ...(selectedSlogan ? { slogan: selectedSlogan } : {}),
+            ...(candidateName ? { candidateName } : {}),
+            ...(candidateConstituency ? { candidateConstituency } : {}),
           });
           URL.revokeObjectURL(photoUrl);
           if (compositeDataUrl.startsWith("data:image")) {
-            b64 = compositeDataUrl.split(",")[1];
+            const generatedBase64 = compositeDataUrl.split(",")[1];
+            if (generatedBase64) b64 = generatedBase64;
           }
         } catch (e) {
           console.warn("Composite fallback failed:", e);

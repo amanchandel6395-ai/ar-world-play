@@ -311,11 +311,14 @@ function Home() {
 
       // Tier 3: Guaranteed 100% Photo Booth Composite (Customer + CM Yogi / PM Modi cutout + Slogan banner)
       if (!finalResultDataUrl) {
+        const candidateName = currentCandidate?.name[lang] || currentCandidate?.name.hi;
+        const candidateConstituency =
+          currentCandidate?.constituency[lang] || currentCandidate?.constituency.hi;
         finalResultDataUrl = await createLeaderComposite(photo, {
           scene,
           interaction,
-          candidateName: currentCandidate?.name[lang] || currentCandidate?.name.hi,
-          candidateConstituency: currentCandidate?.constituency[lang] || currentCandidate?.constituency.hi,
+          ...(candidateName ? { candidateName } : {}),
+          ...(candidateConstituency ? { candidateConstituency } : {}),
         });
       }
 

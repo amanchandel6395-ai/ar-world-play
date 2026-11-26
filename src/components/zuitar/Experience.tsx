@@ -201,7 +201,7 @@ export function Experience({ sceneId }: { sceneId: SceneId }) {
         sceneId={sceneId}
         interaction={interaction}
         allowAi={true}
-        candidate={currentCandidate}
+        {...(currentCandidate ? { candidate: currentCandidate } : {})}
         onRetake={() => {
           setPhoto(null);
           setPhase("live");
