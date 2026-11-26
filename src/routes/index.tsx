@@ -9,8 +9,6 @@ import type { SceneId } from "@/ar/scenes";
 import { useDevMode } from "@/lib/kiosk";
 import { LangToggleLabel, useLang } from "@/lib/i18n";
 import { resolveCandidateFromEnv } from "@/lib/candidateResolver";
-import { getEnhancePrompt } from "@/lib/enhance-prompt";
-import { createLeaderComposite } from "@/lib/photo-compositor";
 
 export const Route = createFileRoute("/")({
   head: () => ({
@@ -264,80 +262,40 @@ function Home() {
     setAiError(null);
     setLastAttempt({ scene, interaction });
     try {
-      let finalResultDataUrl: string | null = null;
-
-      // Tier 1: Try AI Generation with Pollinations AI (free, public, no passwords or keys required)
-      try {
-        const prompt = getEnhancePrompt(scene, interaction);
-        const encoded = encodeURIComponent(prompt);
-        const pollUrl = `https://image.pollinations.ai/prompt/${encoded}?width=768&height=1024&nologo=true&seed=${Math.floor(Math.random() * 100000)}`;
-        const controller = new AbortController();
-        const timeoutId = setTimeout(() => controller.abort(), 7500);
-        const res = await fetch(pollUrl, { signal: controller.signal });
-        clearTimeout(timeoutId);
-        if (res.ok) {
-          const blob = await res.blob();
-          if (blob && blob.size > 1000) {
-            const reader = new FileReader();
-            finalResultDataUrl = await new Promise((resolve) => {
-              reader.onloadend = () => resolve(reader.result as string);
-              reader.readAsDataURL(blob);
-            });
-          }
-        }
-      } catch (err) {
-        console.warn("Pollinations AI attempt timed out or failed:", err);
+      const image = await (await fetch(photo)).blob();
+      const form = new FormData();
+      form.append("image", image, "customer-photo.jpg");
+      form.append("scene", scene);
+      form.append("interaction", interaction);
+      const response = await fetch("/api/enhance", { method: "POST", body: form });
+      const result = (await response.json().catch(() => ({}))) as { b64?: string; code?: string };
+      if (!response.ok || !result.b64) {
+        const message =
+          result.code === "not_configured"
+            ? isHindi
+              ? "AI अभी booth settings में चालू नहीं है।"
+              : "AI is not enabled in booth settings yet."
+            : result.code === "credits"
+              ? isHindi
+                ? "AI credits उपलब्ध नहीं हैं।"
+                : "AI credits are unavailable."
+              : isHindi
+                ? "AI edit अभी पूरा नहीं हो सका।"
+                : "The AI edit could not be completed.";
+        throw new Error(message);
       }
-
-      // Tier 2: Try internal backend API (/api/enhance) if configured
-      if (!finalResultDataUrl) {
-        try {
-          const image = await (await fetch(photo)).blob();
-          const form = new FormData();
-          form.append("image", image, "customer-photo.jpg");
-          form.append("scene", scene);
-          form.append("interaction", interaction);
-          const response = await fetch("/api/enhance", { method: "POST", body: form, signal: AbortSignal.timeout(4000) });
-          if (response.ok) {
-            const result = (await response.json().catch(() => ({}))) as { b64?: string };
-            if (result.b64) {
-              finalResultDataUrl = `data:image/jpeg;base64,${result.b64}`;
-            }
-          }
-        } catch (err) {
-          console.warn("Backend /api/enhance failed:", err);
-        }
-      }
-
-      // Tier 3: Guaranteed 100% Photo Booth Composite (Customer + CM Yogi / PM Modi cutout + Slogan banner)
-      if (!finalResultDataUrl) {
-        const candidateName = currentCandidate?.name[lang] || currentCandidate?.name.hi;
-        const candidateConstituency =
-          currentCandidate?.constituency[lang] || currentCandidate?.constituency.hi;
-        finalResultDataUrl = await createLeaderComposite(photo, {
-          scene,
-          interaction,
-          ...(candidateName ? { candidateName } : {}),
-          ...(candidateConstituency ? { candidateConstituency } : {}),
-        });
-      }
-
-      setAiPhoto(finalResultDataUrl);
+      setAiPhoto(`data:image/jpeg;base64,${result.b64}`);
       setShowAi(true);
       setModalQr(null);
       if (boothMode) {
         setTimeout(() => {
-          void makeModalQrWithPhoto(finalResultDataUrl!);
+          void makeModalQrWithPhoto(`data:image/jpeg;base64,${result.b64}`);
         }, 100);
       }
     } catch (error) {
-      try {
-        const fallback = await createLeaderComposite(photo, { scene, interaction });
-        setAiPhoto(fallback);
-        setShowAi(true);
-      } catch {
-        setAiError(isHindi ? "फोटो तैयार नहीं हो सकी।" : "Photo could not be created.");
-      }
+      setAiError(
+        error instanceof Error ? error.message : isHindi ? "AI edit विफल हुआ।" : "AI edit failed.",
+      );
     } finally {
       setAiBusy(false);
     }

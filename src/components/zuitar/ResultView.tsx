@@ -7,7 +7,6 @@ import type { SceneId } from "@/ar/scenes";
 import type { InteractionId, Candidate } from "@/lib/config";
 import { useLang } from "@/lib/i18n";
 import { getEnhancePrompt } from "@/lib/enhance-prompt";
-import { createLeaderComposite } from "@/lib/photo-compositor";
 
 export const CAMPAIGN_SLOGANS = [
   "अबकी बार 400 पार, मोदी-योगी सरकार",
@@ -321,47 +320,6 @@ export function ResultView({
         }
       }
 
-      // 3. Client-side Pollinations AI fallback
-      if (!b64) {
-        try {
-          const prompt = encodeURIComponent(getEnhancePrompt(sceneId, targetIx));
-          const pollinationsUrl = `https://image.pollinations.ai/prompt/${prompt}?width=1024&height=1024&nologo=true&seed=${Math.floor(Math.random() * 100000)}`;
-          const pollRes = await fetch(pollinationsUrl, { signal: AbortSignal.timeout(8000) });
-          if (pollRes.ok) {
-            const pollBlob = await pollRes.blob();
-            if (pollBlob && pollBlob.size > 1000) {
-              b64 = await toBase64(pollBlob);
-            }
-          }
-        } catch (e) {
-          console.warn("Pollinations fallback failed:", e);
-        }
-      }
-
-      // 4. Guaranteed 100% Photo Booth Composite (Customer + Leader Cutout + Slogan Banner)
-      if (!b64) {
-        try {
-          const photoUrl = URL.createObjectURL(photo);
-          const candidateName = candidate?.name[lang] || candidate?.name.hi;
-          const candidateConstituency =
-            candidate?.constituency[lang] || candidate?.constituency.hi;
-          const compositeDataUrl = await createLeaderComposite(photoUrl, {
-            scene: sceneId,
-            interaction: targetIx,
-            ...(selectedSlogan ? { slogan: selectedSlogan } : {}),
-            ...(candidateName ? { candidateName } : {}),
-            ...(candidateConstituency ? { candidateConstituency } : {}),
-          });
-          URL.revokeObjectURL(photoUrl);
-          if (compositeDataUrl.startsWith("data:image")) {
-            const generatedBase64 = compositeDataUrl.split(",")[1];
-            if (generatedBase64) b64 = generatedBase64;
-          }
-        } catch (e) {
-          console.warn("Composite fallback failed:", e);
-        }
-      }
-
       if (b64) {
         const bin = atob(b64);
         const arr = new Uint8Array(bin.length);
@@ -370,7 +328,7 @@ export function ResultView({
         setShowAi(true);
         setQr(null);
       } else {
-        throw lastError || new Error("AI image generation temporary unavailable. Original photo is ready!");
+        throw lastError || new Error("The AI edit could not be completed.");
       }
     } catch (e) {
       console.error("AI image generation error:", e);
