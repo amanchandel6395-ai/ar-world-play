@@ -420,8 +420,6 @@ export async function handleEnhanceRequest(request: Request): Promise<Response> 
     return Response.json({ b64: primary.b64, provider: primaryProvider });
   }
 
-  // CometAPI requests never silently charge a different service.
-  const useBackup = !cometKey && !!geminiKey && shouldUseBackup(primary);
   logAiEvent("error", {
     event: "ai_provider_error",
     provider: primaryProvider,
@@ -429,27 +427,42 @@ export async function handleEnhanceRequest(request: Request): Promise<Response> 
     interaction,
     category: primary.category,
     status: primary.status,
-    fallbackTriggered: useBackup,
     errorSummary: primary.message,
   });
 
-  let res = primary;
-  if (useBackup && geminiKey) {
-    const backup = await callGemini(geminiKey, image, prompt, refBlob);
-    if (backup.success && backup.b64) {
-      logAiEvent("info", { event: "ai_generation_success", provider: "gemini", scene, interaction });
-      return Response.json({ b64: backup.b64, provider: "gemini" });
+  let res: ProviderResult = primary;
+
+  // Fallback 1: If CometAPI failed (e.g. quota zero or error) and Lovable key is available, try Lovable AI Gateway
+  if (!res.success && lovableKey && primaryProvider === "cometapi") {
+    try {
+      const secondary = await callImageEdits(lovableKey, image, prompt, refBlob, "lovable");
+      if (secondary.success && secondary.b64) {
+        logAiEvent("info", {
+          event: "ai_generation_success",
+          provider: "lovable",
+          scene,
+          interaction,
+        });
+        return Response.json({ b64: secondary.b64, provider: "lovable" });
+      }
+      res = secondary;
+    } catch (e) {
+      console.warn("Lovable fallback failed:", e);
     }
-    logAiEvent("error", {
-      event: "ai_provider_error",
-      provider: "gemini",
-      scene,
-      interaction,
-      category: backup.category,
-      status: backup.status,
-      errorSummary: backup.message,
-    });
-    res = backup;
+  }
+
+  // Fallback 2: Google Gemini backup if configured
+  if (!res.success && geminiKey) {
+    try {
+      const backup = await callGemini(geminiKey, image, prompt, refBlob);
+      if (backup.success && backup.b64) {
+        logAiEvent("info", { event: "ai_generation_success", provider: "gemini", scene, interaction });
+        return Response.json({ b64: backup.b64, provider: "gemini" });
+      }
+      res = backup;
+    } catch (e) {
+      console.warn("Gemini backup failed:", e);
+    }
   }
 
   const finalCategory = res.category;
