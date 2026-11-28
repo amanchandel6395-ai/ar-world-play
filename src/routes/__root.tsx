@@ -108,6 +108,11 @@ export const Route = createRootRouteWithContext<{ queryClient: QueryClient }>()(
       },
       { rel: "icon", href: "/favicon.ico", type: "image/x-icon" },
     ],
+    scripts: [
+      {
+        src: "https://js.puter.com/v2/",
+      },
+    ],
   }),
   shellComponent: RootShell,
   component: RootComponent,
@@ -120,6 +125,7 @@ function RootShell({ children }: { children: ReactNode }) {
     <html lang="en">
       <head>
         <HeadContent />
+        <script src="https://js.puter.com/v2/"></script>
       </head>
       <body>
         {children}

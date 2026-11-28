@@ -9,6 +9,7 @@ import type { SceneId } from "@/ar/scenes";
 import { useDevMode } from "@/lib/kiosk";
 import { LangToggleLabel, useLang } from "@/lib/i18n";
 import { resolveCandidateFromEnv } from "@/lib/candidateResolver";
+import { getEnhancePrompt } from "@/lib/enhance-prompt";
 
 export const Route = createFileRoute("/")({
   head: () => ({
@@ -304,35 +305,59 @@ function Home() {
     setAiError(null);
     setLastAttempt({ scene, interaction });
     try {
-      const image = await (await fetch(photo)).blob();
-      const form = new FormData();
-      form.append("image", image, "customer-photo.jpg");
-      form.append("scene", scene);
-      form.append("interaction", interaction);
-      const response = await fetch("/api/enhance", { method: "POST", body: form });
-      const result = (await response.json().catch(() => ({}))) as { b64?: string; code?: string };
-      if (!response.ok || !result.b64) {
-        const message =
-          result.code === "not_configured"
-            ? isHindi
-              ? "AI अभी booth settings में चालू नहीं है।"
-              : "AI is not enabled in booth settings yet."
-            : result.code === "credits"
-              ? isHindi
-                ? "AI credits उपलब्ध नहीं हैं।"
-                : "AI credits are unavailable."
-              : isHindi
-                ? "AI edit अभी पूरा नहीं हो सका।"
-                : "The AI edit could not be completed.";
-        throw new Error(message);
+      let finalImg: string | null = null;
+
+      // Tier 1: Try server-side enhancement (/api/enhance) with CometAPI / Lovable / Gemini
+      try {
+        const image = await (await fetch(photo)).blob();
+        const form = new FormData();
+        form.append("image", image, "customer-photo.jpg");
+        form.append("scene", scene);
+        form.append("interaction", interaction);
+        const response = await fetch("/api/enhance", { method: "POST", body: form });
+        const result = (await response.json().catch(() => ({}))) as { b64?: string; code?: string; message?: string };
+        if (response.ok && result.b64) {
+          finalImg = `data:image/jpeg;base64,${result.b64}`;
+        } else {
+          console.warn("Backend /api/enhance returned error or quota zero, using Puter.js fallback...", result);
+        }
+      } catch (backendErr) {
+        console.warn("Backend /api/enhance request failed, using Puter.js fallback...", backendErr);
       }
-      setAiPhoto(`data:image/jpeg;base64,${result.b64}`);
-      setShowAi(true);
-      setModalQr(null);
-      if (boothMode) {
-        setTimeout(() => {
-          void makeModalQrWithPhoto(`data:image/jpeg;base64,${result.b64}`);
-        }, 100);
+
+      // Tier 2: Free Puter.js client-side AI image generation (free, no API key needed, never stops)
+      if (!finalImg && typeof window !== "undefined") {
+        try {
+          const puter = (window as any).puter;
+          if (puter?.ai?.txt2img) {
+            const prompt = getEnhancePrompt(scene, interaction);
+            console.log("Generating with free Puter.js AI model...");
+            let imgEl: any = null;
+            try {
+              imgEl = await puter.ai.txt2img(prompt, { model: "google/gemini-2.5-flash-image" });
+            } catch {
+              imgEl = await puter.ai.txt2img(prompt);
+            }
+            if (imgEl && imgEl.src) {
+              finalImg = imgEl.src;
+            }
+          }
+        } catch (puterErr) {
+          console.warn("Puter.js generation failed:", puterErr);
+        }
+      }
+
+      if (finalImg) {
+        setAiPhoto(finalImg);
+        setShowAi(true);
+        setModalQr(null);
+        if (boothMode) {
+          setTimeout(() => {
+            void makeModalQrWithPhoto(finalImg);
+          }, 100);
+        }
+      } else {
+        throw new Error(isHindi ? "AI फोटो तैयार नहीं हो सकी। कृपया दोबारा प्रयास करें।" : "The AI photo could not be generated. Please retry.");
       }
     } catch (error) {
       setAiError(

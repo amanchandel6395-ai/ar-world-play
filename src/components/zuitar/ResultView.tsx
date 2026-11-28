@@ -6,6 +6,7 @@ import { KIOSK, useIdleReset } from "@/lib/kiosk";
 import type { SceneId } from "@/ar/scenes";
 import type { InteractionId, Candidate } from "@/lib/config";
 import { useLang } from "@/lib/i18n";
+import { getEnhancePrompt } from "@/lib/enhance-prompt";
 
 export const CAMPAIGN_SLOGANS = [
   "अबकी बार 400 पार, मोदी-योगी सरकार",
@@ -284,24 +285,55 @@ export function ResultView({
     setAiBusy(true);
     setMsg(null);
     try {
-      const fd = new FormData();
-      fd.append("image", photo, "capture.jpg");
-      fd.append("scene", sceneId);
-      fd.append("interaction", targetIx);
-      const res = await fetch("/api/enhance", { method: "POST", body: fd });
-      if (!res.ok) {
-        const j = (await res.json().catch(() => ({}))) as {
-          code?: string;
-          message?: string;
-        };
-        throw new Error(j.message || "The AI edit could not be completed.");
+      let finalBlob: Blob | null = null;
+
+      // Tier 1: Internal backend API (/api/enhance)
+      try {
+        const fd = new FormData();
+        fd.append("image", photo, "capture.jpg");
+        fd.append("scene", sceneId);
+        fd.append("interaction", targetIx);
+        const res = await fetch("/api/enhance", { method: "POST", body: fd });
+        if (res.ok) {
+          const j = (await res.json().catch(() => ({}))) as { b64?: string };
+          if (j.b64) {
+            const bin = Uint8Array.from(atob(j.b64), (c) => c.charCodeAt(0));
+            finalBlob = new Blob([bin], { type: "image/jpeg" });
+          }
+        }
+      } catch (backendErr) {
+        console.warn("Backend /api/enhance failed, trying Puter.js...", backendErr);
       }
-      const { b64 } = (await res.json()) as { b64?: string };
-      if (!b64) throw new Error("The photo service returned no completed image.");
-      const bin = Uint8Array.from(atob(b64), (c) => c.charCodeAt(0));
-      setAiPhoto(new Blob([bin], { type: "image/jpeg" }));
-      setShowAi(true);
-      setQr(null);
+
+      // Tier 2: Free Puter.js client-side fallback
+      if (!finalBlob && typeof window !== "undefined") {
+        try {
+          const puter = (window as any).puter;
+          if (puter?.ai?.txt2img) {
+            const prompt = getEnhancePrompt(sceneId, targetIx);
+            let imgEl: any = null;
+            try {
+              imgEl = await puter.ai.txt2img(prompt, { model: "google/gemini-2.5-flash-image" });
+            } catch {
+              imgEl = await puter.ai.txt2img(prompt);
+            }
+            if (imgEl && imgEl.src) {
+              const res = await fetch(imgEl.src);
+              finalBlob = await res.blob();
+            }
+          }
+        } catch (puterErr) {
+          console.warn("Puter fallback failed:", puterErr);
+        }
+      }
+
+      if (finalBlob) {
+        setAiPhoto(finalBlob);
+        setShowAi(true);
+        setQr(null);
+      } else {
+        throw new Error("The AI photo could not be completed.");
+      }
     } catch (e) {
       console.error("AI image generation error:", e);
       setMsg(e instanceof Error && e.message ? e.message : "AI enhancement failed.");
